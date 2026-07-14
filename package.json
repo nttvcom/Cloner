@@ -1,0 +1,17 @@
+{
+  "name": "clone",
+  "version": "0.1.0",
+  "description": "MVP cooperative platformer where each player collides only with the other player's clone.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "platformer",
+    "node",
+    "canvas",
+    "multiplayer"
+  ],
+  "author": "",
+  "license": "MIT"
+}
