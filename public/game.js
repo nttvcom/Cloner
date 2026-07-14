@@ -17,8 +17,7 @@ const hostingNote = document.querySelector("#hostingNote");
 
 const configuredApiBase = document.querySelector('meta[name="clone-api-base"]')?.content.trim() || "";
 const API_BASE = configuredApiBase.replace(/\/$/, "");
-const IS_GITHUB_PAGES = location.hostname.endsWith(".github.io");
-const ONLINE_AVAILABLE = !IS_GITHUB_PAGES || Boolean(API_BASE);
+let onlineAvailable = false;
 
 const W = canvas.width;
 const H = canvas.height;
@@ -105,15 +104,15 @@ const levels = [
     name: "Needle Easy",
     spawn1: { x: 70, y: 414 },
     spawn2: { x: 850, y: 414 },
-    goal: { x: 445, y: 95, w: 68, h: 78 },
+    goal: { x: 445, y: 70, w: 68, h: 78 },
     solids: [
       { x: 0, y: 500, w: 430, h: 40 },
       { x: 530, y: 500, w: 430, h: 40 },
       { x: 0, y: 0, w: 24, h: 540 },
       { x: 936, y: 0, w: 24, h: 540 },
-      { x: 405, y: 380, w: 150, h: 22 },
-      { x: 405, y: 282, w: 150, h: 22 },
-      { x: 405, y: 195, w: 150, h: 22 }
+      { x: 335, y: 405, w: 150, h: 22 },
+      { x: 465, y: 300, w: 150, h: 22 },
+      { x: 350, y: 195, w: 150, h: 22 }
     ]
   },
   {
@@ -708,13 +707,44 @@ function loop(now) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Ошибка сервера");
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      headers: { "Content-Type": "application/json" },
+      ...options
+    });
+  } catch {
+    throw new Error("Сетевой сервер недоступен.");
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    throw new Error("Сетевой API не настроен для этого сайта.");
+  }
+
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("Сервер вернул некорректный ответ.");
+  }
+
+  if (!response.ok) throw new Error(data.error || `Ошибка сервера (${response.status})`);
   return data;
+}
+
+async function detectOnlineApi() {
+  try {
+    await api("/api/health");
+    onlineAvailable = true;
+    onlineActions.classList.remove("hidden");
+    hostingNote.classList.add("hidden");
+  } catch {
+    onlineAvailable = false;
+    onlineActions.classList.add("hidden");
+    hostingNote.classList.remove("hidden");
+  }
 }
 
 function normalizeCodeInput(value) {
@@ -819,14 +849,11 @@ async function startOnline(data) {
 
 onePcBtn.addEventListener("click", startOnePc);
 
-if (!ONLINE_AVAILABLE) {
-  onlineActions.classList.add("hidden");
-  hostingNote.classList.remove("hidden");
-}
+detectOnlineApi();
 
 createForm.addEventListener("submit", async event => {
   event.preventDefault();
-  if (!ONLINE_AVAILABLE) return;
+  if (!onlineAvailable) return;
   const code = normalizeCodeInput(customCodeInput.value);
 
   if (code && !CODE_RE.test(code)) {
@@ -848,7 +875,7 @@ createForm.addEventListener("submit", async event => {
 
 joinForm.addEventListener("submit", async event => {
   event.preventDefault();
-  if (!ONLINE_AVAILABLE) return;
+  if (!onlineAvailable) return;
   const code = normalizeCodeInput(roomCodeInput.value);
 
   if (!CODE_RE.test(code)) {
