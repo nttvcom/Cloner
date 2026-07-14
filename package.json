@@ -1,17 +1,23 @@
 {
-  "name": "clone",
-  "version": "0.1.0",
-  "description": "MVP cooperative platformer where each player collides only with the other player's clone.",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "keywords": [
-    "platformer",
-    "node",
-    "canvas",
-    "multiplayer"
+  "name": "cloner",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Cloner — cooperative 2D puzzle-platformer built around one rule: you can only interact with the OTHER player's clone.",
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "client",
+    "server"
   ],
-  "author": "",
+  "scripts": {
+    "dev:client": "npm run dev --workspace client",
+    "dev:server": "npm run dev --workspace server",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "start:legacy": "node server.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  },
   "license": "MIT"
 }
