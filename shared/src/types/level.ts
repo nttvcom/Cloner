@@ -6,8 +6,9 @@ interface LevelObjectBase {
 }
 
 /**
- * Pressed by players or the OTHER player's clone (the Golden Rule applies to
- * button activation too). While active it powers every object in `targets`:
+ * A held-only pressure plate: pure weight sensor, pressed by any player or
+ * ANY clone — including the owner's (designer ruling; the Golden Rule governs
+ * collision, not weight). While active it powers every object in `targets`:
  * doors open, lasers stop firing, platforms/elevators run.
  */
 export interface ButtonDef extends LevelObjectBase {

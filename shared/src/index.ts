@@ -1,5 +1,6 @@
 export * from './constants/game';
 export * from './constants/physics';
+export * from './constants/objects';
 export * from './types/core';
 export * from './types/input';
 export * from './types/entities';
@@ -7,6 +8,7 @@ export * from './types/level';
 export * from './messages';
 export * from './sim/rules';
 export * from './sim/aabb';
+export * from './sim/laser';
 export * from './sim/events';
 export * from './sim/Simulation';
 export * from './levels';
