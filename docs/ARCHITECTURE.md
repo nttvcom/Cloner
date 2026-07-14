@@ -105,16 +105,29 @@ language, fullscreen). No accounts, no server persistence for now.
 ## Milestones
 
 1. **Scaffolding** — workspaces, tsconfigs, shared types/constants/protocol, boot-able client and server. *(done)*
-2. **Simulation core** — AABB physics, player movement, clone place/remove + Golden Rule, level schema + reset, unit tests.
+2. **Simulation core** — AABB physics, player movement, clone place/remove + Golden Rule, level schema + reset, unit tests. *(done)*
 3. **Local play** — Game scene rendering the sim, Duo-on-one-PC playable on a test level.
 4. **Objects** — buttons, doors, exits, lasers, moving platforms, elevators.
 5. **Online** — rooms, lobby/ready flow, snapshots + interpolation, disconnect handling.
 6. **UI & meta** — menus, level select, settings, save, i18n (en), audio.
 7. **Content & polish** — level set with a teaching curve, death fragments, teleport effects, ru locale.
 
-## Open questions (blocked on the designer)
+## Design decisions log (answered by the designer, 2026-07-14)
 
-- Clone limit: per player or a shared pool for the pair?
-- Buttons: active only **while held down**, or toggle on activation?
-- The sketch HUD shows `10:00` — is there a countdown/timer mechanic, or a plain stopwatch?
-- Default one-PC controls for Player 2 (Player 1 = WASD + E/F).
+- Play modes: **Duo on one PC** + **Online co-op**. No Solo mode.
+- Language: **English default**, Russian added later through the i18n layer.
+- Old prototype: rewrite; delete `public/` + `server.js` once the rewrite reaches parity.
+- Clone limit is **per player** (`cloneLimitPerPlayer` in the level schema).
+- Buttons are **hold-only** pressure plates: active while a valid body is on them.
+- HUD timer is a **stopwatch** (counts up, informational only, no fail condition).
+- One-PC defaults: P1 = WASD + E (place) / F (remove); P2 = Arrows + K (place) / L (remove). Rebindable in Settings.
+
+## Working assumptions (flag to the designer before they calcify)
+
+- Players do **not** collide with each other (spec is silent; standard for co-op, avoids griefing).
+- Buttons are pure pressure sensors: any player or any clone standing on one presses it,
+  including a clone the owner placed there themselves. The Golden Rule governs *physical*
+  interaction; a clone resting on a plate is the clone's weight, not the owner's touch.
+- A level completes when **all** exits are satisfied at the same moment
+  (blue exit contains blue, red contains red, gray contains anyone, double contains both).
+- Screen edges are solid walls/floor/ceiling ("players cannot leave the screen").
