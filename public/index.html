@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#111216">
+    <meta name="description" content="Cloner — кооперативный платформер для двух игроков на одной клавиатуре.">
+    <meta name="clone-api-base" content="">
+    <title>Cloner</title>
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section id="menu" class="menu">
+        <div class="brand">
+          <span class="mark" aria-hidden="true"></span>
+          <div>
+            <p class="eyebrow">CO-OP PLATFORMER</p>
+            <h1>Cloner</h1>
+            <p>Создавай клона и превращай его в платформу для напарника.</p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="onePcBtn" class="primary" type="button">Играть на одном ПК</button>
+          <div id="onlineActions" class="online-actions">
+            <form id="createForm" class="join">
+              <input id="customCodeInput" maxlength="6" pattern="[A-Za-z0-9]{6}" placeholder="GHOST1" aria-label="Свой код комнаты">
+              <button id="createBtn" type="submit">Создать</button>
+            </form>
+            <form id="joinForm" class="join">
+              <input id="roomCodeInput" maxlength="6" pattern="[A-Za-z0-9]{6}" placeholder="ABC123" aria-label="Код комнаты">
+              <button type="submit">Войти</button>
+            </form>
+          </div>
+        </div>
+
+        <p id="hostingNote" class="hosting-note hidden">
+          На GitHub Pages доступна локальная игра. Для сетевых комнат нужен отдельный сервер API.
+        </p>
+        <p id="menuStatus" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="game" class="game hidden">
+        <div class="topbar">
+          <div>
+            <strong id="modeLabel">На одном ПК</strong>
+            <span id="roomLabel"></span>
+          </div>
+          <div class="legend">
+            <span><i class="p1"></i>P1</span>
+            <span><i class="p2"></i>P2</span>
+            <span><i class="clone"></i>чужой клон = платформа</span>
+          </div>
+          <button id="leaveBtn" type="button">Меню</button>
+        </div>
+
+        <canvas id="gameCanvas" width="960" height="540" aria-label="Игровое поле"></canvas>
+
+        <div class="help">
+          <span>P1: WASD + E</span>
+          <span>P2: стрелки + правый Alt</span>
+          <span>R — рестарт уровня</span>
+        </div>
+      </section>
+    </main>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
