@@ -35,8 +35,6 @@ easy to audit.
     /rooms         room lifecycle, codes, lobby/ready state
     /network       connection handling, message validation
     (game loop drives the SAME simulation from /shared)
-/public + server.js   LEGACY vanilla-JS prototype — kept until the rewrite reaches
-                      feature parity, then deleted. Do not extend it.
 ```
 
 ## Decision 1 — The simulation lives in `/shared`, not in Phaser
