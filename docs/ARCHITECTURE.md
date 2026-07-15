@@ -106,11 +106,23 @@ language, fullscreen). No accounts, no server persistence for now.
 
 1. **Scaffolding** — workspaces, tsconfigs, shared types/constants/protocol, boot-able client and server. *(done)*
 2. **Simulation core** — AABB physics, player movement, clone place/remove + Golden Rule, level schema + reset, unit tests. *(done)*
-3. **Local play** — Game scene rendering the sim, Duo-on-one-PC playable on a test level.
-4. **Objects** — buttons, doors, exits, lasers, moving platforms, elevators.
-5. **Online** — rooms, lobby/ready flow, snapshots + interpolation, disconnect handling.
-6. **UI & meta** — menus, level select, settings, save, i18n (en), audio.
-7. **Content & polish** — level set with a teaching curve, death fragments, teleport effects, ru locale.
+3. **Local play** — Game scene rendering the sim, Duo-on-one-PC playable. *(done)*
+4. **Objects** — buttons, doors, exits, lasers, moving platforms, elevators. *(done — see `shared/src/sim/Simulation.ts`)*
+5. **Online** — rooms, lobby/ready flow, snapshots, disconnect handling. *(done — `server/src/rooms.ts`; the same HTTP server also serves the built client, so ws and the page share one port)*
+6. **UI & meta** — menus, level select, i18n (en + ru toggle), save (localStorage progress). *(done; audio & key rebinding still open)*
+7. **Content & polish** — 8-level campaign with a teaching curve (`shared/src/levels/campaign.ts`). *(levels done; death fragments / teleport effects are minimal camera FX for now)*
+
+### Notable implementation details
+
+- The server game loop is wall-clock driven (accumulator over `setInterval(8ms)`) because
+  Windows/Node timers fire a 16.7ms interval at ~26ms; the naive loop ran at 38Hz instead of 60.
+- Lasers fire by default; a pressed button wired to a laser *suppresses* it. For doors,
+  platforms and elevators an object with **no** wiring is permanently powered.
+- Doors never crush: a door that wants to close while a body overlaps it stays open.
+- A platform whose next position would overlap a clone that is not riding it stalls
+  (players can deliberately jam elevators with clones).
+- The rendered laser beam and the lethal beam are computed by the same shared function
+  (`computeLaserBeam` + `beamObstaclesFromSnapshot`).
 
 ## Design decisions log (answered by the designer, 2026-07-14)
 

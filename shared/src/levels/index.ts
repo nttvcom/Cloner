@@ -1,11 +1,16 @@
 import type { LevelDefinition } from '../types/level';
+import { CAMPAIGN_LEVELS } from './campaign';
 import { TEST_LEVEL } from './test-level';
 
-/** Ordered level set. Milestone 7 replaces the sandbox with the real curve. */
-export const LEVELS: readonly LevelDefinition[] = [TEST_LEVEL];
+/** Ordered playable level set (the campaign). */
+export const LEVELS: readonly LevelDefinition[] = CAMPAIGN_LEVELS;
 
 export function getLevelById(id: string): LevelDefinition | undefined {
   return LEVELS.find((level) => level.id === id);
 }
 
-export { TEST_LEVEL };
+export function getLevelIndex(id: string): number {
+  return LEVELS.findIndex((level) => level.id === id);
+}
+
+export { CAMPAIGN_LEVELS, TEST_LEVEL };

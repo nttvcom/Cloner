@@ -1,7 +1,8 @@
 import { LASER_BEAM_THICKNESS } from '../constants/objects';
-import { VIEW_HEIGHT, VIEW_WIDTH } from '../constants/game';
+import { PLAYER_SIZE, VIEW_HEIGHT, VIEW_WIDTH } from '../constants/game';
 import type { AABB, Vec2 } from '../types/core';
-import type { LaserDef } from '../types/level';
+import type { SimulationSnapshot } from '../types/entities';
+import type { LaserDef, LevelDefinition } from '../types/level';
 import { aabbIntersects } from './aabb';
 
 /**
@@ -66,4 +67,36 @@ export function computeLaserBeam(def: LaserDef, obstacles: readonly AABB[]): AAB
   }
 
   return beam;
+}
+
+/**
+ * Rebuilds the beam-obstacle set from a snapshot: level solids, closed doors,
+ * platforms at their current positions and every clone. Must mirror the
+ * simulation's own obstacle set so the rendered beam equals the lethal beam.
+ */
+export function beamObstaclesFromSnapshot(
+  level: LevelDefinition,
+  snapshot: SimulationSnapshot,
+): AABB[] {
+  const obstacles: AABB[] = [...level.solids];
+  for (const object of level.objects) {
+    if (object.kind === 'door' && !snapshot.doors[object.id]) {
+      obstacles.push(object.bounds);
+    }
+    if (object.kind === 'movingPlatform' || object.kind === 'elevator') {
+      const position = snapshot.platforms[object.id];
+      if (position) {
+        obstacles.push({ ...position, width: object.size.width, height: object.size.height });
+      }
+    }
+  }
+  for (const clone of snapshot.clones) {
+    obstacles.push({
+      x: clone.position.x,
+      y: clone.position.y,
+      width: PLAYER_SIZE,
+      height: PLAYER_SIZE,
+    });
+  }
+  return obstacles;
 }
