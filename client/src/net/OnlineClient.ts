@@ -8,9 +8,9 @@ import type {
 } from '@cloner/shared';
 
 export interface OnlineClientEvents {
-  joined: (code: string, color: PlayerColor, lobby: LobbyPlayer[]) => void;
+  joined: (code: string, color: PlayerColor, lobby: LobbyPlayer[], levelId: string) => void;
   roomError: (reason: RoomErrorReason) => void;
-  lobby: (lobby: LobbyPlayer[]) => void;
+  lobby: (lobby: LobbyPlayer[], levelId: string) => void;
   gameStart: (levelId: string) => void;
   snapshot: (snapshot: SimulationSnapshot) => void;
   levelComplete: (levelId: string) => void;
@@ -84,13 +84,13 @@ export class OnlineClient {
       case 'roomJoined':
         this.yourColor = message.yourColor;
         this.roomCode = message.code;
-        this.handlers.joined?.(message.code, message.yourColor, message.lobby);
+        this.handlers.joined?.(message.code, message.yourColor, message.lobby, message.levelId);
         break;
       case 'roomError':
         this.handlers.roomError?.(message.reason);
         break;
       case 'lobbyState':
-        this.handlers.lobby?.(message.lobby);
+        this.handlers.lobby?.(message.lobby, message.levelId);
         break;
       case 'gameStart':
         this.handlers.gameStart?.(message.levelId);

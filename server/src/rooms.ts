@@ -7,6 +7,7 @@ import {
   SIMULATION_TICK_RATE,
   SNAPSHOT_SEND_RATE,
   Simulation,
+  getLevelIndex,
   type InputMap,
   type LobbyPlayer,
   type PlayerColor,
@@ -97,13 +98,26 @@ export class Room {
     }
   }
 
+  get levelId(): string {
+    return LEVELS[this.levelIndex]?.id ?? LEVELS[0]!.id;
+  }
+
   setReady(color: PlayerColor, ready: boolean): void {
     if (this.sim) return; // no toggling mid-game
     this.ready[color] = ready === true;
-    this.broadcast({ type: 'lobbyState', lobby: this.lobbySnapshot() });
+    this.broadcast({ type: 'lobbyState', lobby: this.lobbySnapshot(), levelId: this.levelId });
     if (this.isFull && this.ready.blue && this.ready.red) {
       this.startLevel(this.levelIndex);
     }
+  }
+
+  /** Host (blue) picks the starting level while in the lobby. */
+  selectLevel(color: PlayerColor, levelId: unknown): void {
+    if (this.sim || color !== 'blue') return;
+    const index = getLevelIndex(String(levelId));
+    if (index < 0) return;
+    this.levelIndex = index;
+    this.broadcast({ type: 'lobbyState', lobby: this.lobbySnapshot(), levelId: this.levelId });
   }
 
   applyInput(color: PlayerColor, raw: unknown): void {
@@ -122,7 +136,7 @@ export class Room {
       return;
     }
     this.broadcast({ type: 'peerLeft' });
-    this.broadcast({ type: 'lobbyState', lobby: this.lobbySnapshot() });
+    this.broadcast({ type: 'lobbyState', lobby: this.lobbySnapshot(), levelId: this.levelId });
   }
 
   memberByColor(color: PlayerColor): Member | undefined {
@@ -136,7 +150,7 @@ export class Room {
       this.levelIndex = 0;
       this.ready.blue = false;
       this.ready.red = false;
-      this.broadcast({ type: 'lobbyState', lobby: this.lobbySnapshot() });
+      this.broadcast({ type: 'lobbyState', lobby: this.lobbySnapshot(), levelId: this.levelId });
       return;
     }
     this.levelIndex = index;

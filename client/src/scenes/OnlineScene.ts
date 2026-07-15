@@ -3,7 +3,8 @@ import { ROOM_CODE_LENGTH, VIEW_HEIGHT, VIEW_WIDTH } from '@cloner/shared';
 import { UI } from '../colors';
 import { t } from '../i18n';
 import { OnlineClient } from '../net/OnlineClient';
-import { makeButton, title } from '../ui';
+import { setupCamera } from '../scale';
+import { fadeIn, goTo, makeButton, makeText, makeTitle } from '../ui';
 
 /** Host / join chooser plus the room-code keyboard entry. */
 export class OnlineScene extends Phaser.Scene {
@@ -22,24 +23,31 @@ export class OnlineScene extends Phaser.Scene {
     this.enteredCode = '';
     this.joining = false;
     this.codeText = null;
+    setupCamera(this);
+    fadeIn(this);
 
     const cx = VIEW_WIDTH / 2;
-    title(this, cx, 70, t('online.title'));
+    makeTitle(this, cx, 60, t('online.title'));
 
-    makeButton(this, cx, 200, t('online.host'), () => void this.host());
-    makeButton(this, cx, 270, t('online.join'), () => this.showCodeEntry());
+    makeButton(this, cx, 165, t('online.host'), () => void this.host(), { primary: true });
+    makeButton(this, cx, 232, t('online.join'), () => this.showCodeEntry());
 
-    this.statusText = this.add
-      .text(cx, 350, '', { fontFamily: 'monospace', fontSize: '16px', color: UI.accent })
-      .setOrigin(0.5);
+    this.statusText = makeText(this, cx, 300, '', { size: 15, color: UI.accent }).setOrigin(0.5);
 
-    makeButton(this, cx, VIEW_HEIGHT - 45, t('online.back'), () => {
-      this.client?.disconnect();
-      this.scene.start('Menu');
-    }, { fontSize: 18 });
+    makeButton(
+      this,
+      cx,
+      VIEW_HEIGHT - 42,
+      t('online.back'),
+      () => {
+        this.client?.disconnect();
+        goTo(this, 'Menu');
+      },
+      { width: 170, height: 40, size: 15 },
+    );
     this.input.keyboard!.on('keydown-ESC', () => {
       this.client?.disconnect();
-      this.scene.start('Menu');
+      goTo(this, 'Menu');
     });
   }
 
@@ -53,6 +61,7 @@ export class OnlineScene extends Phaser.Scene {
       this.statusText.setText(t('online.error.connect'));
       return null;
     }
+    this.statusText.setText('');
     this.client = client;
     return client;
   }
@@ -67,17 +76,12 @@ export class OnlineScene extends Phaser.Scene {
   private showCodeEntry(): void {
     if (this.codeText) return;
     const cx = VIEW_WIDTH / 2;
-    this.add
-      .text(cx, 400, t('online.enterCode'), { fontFamily: 'monospace', fontSize: '16px', color: UI.dim })
-      .setOrigin(0.5);
-    this.codeText = this.add
-      .text(cx, 440, '______', {
-        fontFamily: 'monospace',
-        fontSize: '36px',
-        color: UI.text,
-        letterSpacing: 8,
-      })
-      .setOrigin(0.5);
+    makeText(this, cx, 348, t('online.enterCode'), { size: 15, color: UI.dim }).setOrigin(0.5);
+    this.codeText = makeText(this, cx, 390, '______', {
+      size: 34,
+      bold: true,
+      letterSpacing: 10,
+    }).setOrigin(0.5);
 
     this.input.keyboard!.on('keydown', (event: KeyboardEvent) => {
       if (this.joining) return;
@@ -102,10 +106,10 @@ export class OnlineScene extends Phaser.Scene {
   }
 
   private wireLobbyHandoff(client: OnlineClient): void {
-    client.on('joined', (code, color, lobby) => {
+    client.on('joined', (code, color, lobby, levelId) => {
       client.off('joined');
       client.off('roomError');
-      this.scene.start('Lobby', { client, code, color, lobby });
+      this.scene.start('Lobby', { client, code, color, lobby, levelId });
     });
     client.on('roomError', (reason) => {
       this.joining = false;

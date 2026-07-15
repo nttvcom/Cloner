@@ -10,6 +10,8 @@ export type ClientMessage =
   | { type: 'createRoom'; customCode?: string }
   | { type: 'joinRoom'; code: string }
   | { type: 'setReady'; ready: boolean }
+  /** Host (blue) only, lobby only: pick the level the room will start from. */
+  | { type: 'selectLevel'; levelId: string }
   | { type: 'input'; tick: number; input: PlayerInput }
   | { type: 'leaveRoom' };
 
@@ -26,9 +28,9 @@ export interface LobbyPlayer {
 export type RoomErrorReason = 'notFound' | 'full' | 'invalidCode' | 'codeTaken';
 
 export type ServerMessage =
-  | { type: 'roomJoined'; code: string; yourColor: PlayerColor; lobby: LobbyPlayer[] }
+  | { type: 'roomJoined'; code: string; yourColor: PlayerColor; lobby: LobbyPlayer[]; levelId: string }
   | { type: 'roomError'; reason: RoomErrorReason }
-  | { type: 'lobbyState'; lobby: LobbyPlayer[] }
+  | { type: 'lobbyState'; lobby: LobbyPlayer[]; levelId: string }
   | { type: 'gameStart'; levelId: string; startTick: number }
   | { type: 'snapshot'; tick: number; state: SimulationSnapshot }
   | { type: 'levelComplete'; levelId: string }

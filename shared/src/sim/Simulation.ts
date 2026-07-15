@@ -174,20 +174,38 @@ export class Simulation {
     return events;
   }
 
+  /**
+   * Hand-rolled deep copy: this runs every render frame on the client and
+   * 20x/s on the server, and structuredClone here was one of the largest
+   * frame-time costs in profiling.
+   */
   snapshot(): SimulationSnapshot {
     const platforms: Record<ObjectId, Vec2> = {};
     for (const [id, runtime] of Object.entries(this.platforms)) {
-      platforms[id] = runtime.position;
+      platforms[id] = { x: runtime.position.x, y: runtime.position.y };
     }
-    return structuredClone({
-      tick: this.tick,
-      players: this.players,
-      clones: this.clones,
-      buttons: this.buttonsPressed,
-      doors: this.doorsOpen,
-      lasers: this.lasersFiring,
-      platforms,
+    const copyPlayer = (p: PlayerState): PlayerState => ({
+      color: p.color,
+      position: { x: p.position.x, y: p.position.y },
+      velocity: { x: p.velocity.x, y: p.velocity.y },
+      isGrounded: p.isGrounded,
+      isAlive: p.isAlive,
+      teleportTicksLeft: p.teleportTicksLeft,
     });
+    return {
+      tick: this.tick,
+      players: { blue: copyPlayer(this.players.blue), red: copyPlayer(this.players.red) },
+      clones: this.clones.map((c) => ({
+        owner: c.owner,
+        position: { x: c.position.x, y: c.position.y },
+        rotation: c.rotation,
+        attachedPlatformId: c.attachedPlatformId,
+      })),
+      buttons: { ...this.buttonsPressed },
+      doors: { ...this.doorsOpen },
+      lasers: { ...this.lasersFiring },
+      platforms,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -297,6 +315,35 @@ export class Simulation {
         continue;
       }
 
+      // Players in the way are pushed along; if a push would squeeze someone
+      // into a wall or off-screen, the platform stalls instead of crushing.
+      const pushes: { player: PlayerState; to: Vec2 }[] = [];
+      let blocked = false;
+      for (const color of PLAYER_COLORS) {
+        const player = this.players[color];
+        if (!this.playerIsPresent(player) || riders.players.includes(player)) continue;
+        if (!aabbIntersects(candidate, this.playerBox(player))) continue;
+        const to = { x: player.position.x + delta.x, y: player.position.y + delta.y };
+        const pushedBox: AABB = { x: to.x, y: to.y, width: PLAYER_SIZE, height: PLAYER_SIZE };
+        const squeezed =
+          to.x < 0 ||
+          to.y < 0 ||
+          to.x + PLAYER_SIZE > VIEW_WIDTH ||
+          to.y + PLAYER_SIZE > VIEW_HEIGHT ||
+          this.level.solids.some((solid) => aabbIntersects(pushedBox, solid)) ||
+          this.doorDefs.some((door) => !this.doorsOpen[door.id] && aabbIntersects(pushedBox, door.bounds));
+        if (squeezed) {
+          blocked = true;
+          break;
+        }
+        pushes.push({ player, to });
+      }
+      if (blocked) {
+        runtime.progress = riders.savedProgress;
+        runtime.segment = riders.savedSegment;
+        continue;
+      }
+
       runtime.position = target;
       for (const clone of riders.clones) {
         clone.position.x += delta.x;
@@ -306,6 +353,10 @@ export class Simulation {
       for (const player of riders.players) {
         player.position.x += delta.x;
         player.position.y += delta.y;
+      }
+      for (const push of pushes) {
+        push.player.position.x = push.to.x;
+        push.player.position.y = push.to.y;
       }
     }
   }

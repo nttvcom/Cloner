@@ -1,4 +1,4 @@
-﻿import Phaser from 'phaser';
+import Phaser from 'phaser';
 import {
   LEVELS,
   getLevelIndex,
@@ -12,6 +12,8 @@ import { DuoKeyboard, SoloKeyboard } from '../input/keyboard';
 import { t } from '../i18n';
 import { LevelRenderer } from '../render/LevelRenderer';
 import { recordLevelComplete } from '../save';
+import { fadeIn, goTo, makeText } from '../ui';
+import { setupCamera } from '../scale';
 import type { GameSession } from '../sessions/GameSession';
 import { LocalSession } from '../sessions/LocalSession';
 import { OnlineSession } from '../sessions/OnlineSession';
@@ -27,10 +29,12 @@ export class GameScene extends Phaser.Scene {
   private levelIndex = 0;
 
   private timerText!: Phaser.GameObjects.Text;
+  private fpsText!: Phaser.GameObjects.Text;
   private cloneTexts: Partial<Record<PlayerColor, Phaser.GameObjects.Text>> = {};
   private elapsedMs = 0;
   private overlayShown = false;
   private ended = false;
+  private showFps = false;
 
   constructor() {
     super('Game');
@@ -41,6 +45,8 @@ export class GameScene extends Phaser.Scene {
     this.overlayShown = false;
     this.ended = false;
     this.cloneTexts = {};
+    setupCamera(this);
+    fadeIn(this);
 
     if (data.mode === 'local') {
       this.levelIndex = data.levelIndex;
@@ -54,54 +60,76 @@ export class GameScene extends Phaser.Scene {
 
     this.levelRenderer = new LevelRenderer(this, this.session.level);
     this.buildHud();
+    this.announceLevel();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.levelRenderer.destroy();
     });
 
     this.input.keyboard!.on('keydown-ESC', () => this.quitToMenu());
+    this.input.keyboard!.on('keydown-F3', () => {
+      this.showFps = !this.showFps;
+      this.fpsText.setVisible(this.showFps);
+    });
   }
 
   private quitToMenu(): void {
+    if (this.ended) return;
+    this.ended = true;
     this.session.dispose();
-    if (this.session.mode === 'online') {
-      const online = this.session as OnlineSession;
-      void online; // client life ends with the page for now: simplest reliable cleanup
+    if (this.session instanceof OnlineSession) {
+      this.session.leave();
     }
-    this.scene.start('Menu');
+    goTo(this, 'Menu');
   }
 
   private buildHud(): void {
     const level = this.session.level;
-    this.add
-      .text(12, 10, `${this.levelIndex + 1}. ${t(level.nameKey)}`, {
-        fontFamily: 'monospace',
-        fontSize: '15px',
-        color: UI.dim,
-      })
-      .setDepth(10);
-    this.timerText = this.add
-      .text(VIEW_WIDTH / 2, 10, '00:00', { fontFamily: 'monospace', fontSize: '16px', color: UI.text })
+    makeText(this, 12, 8, `${this.levelIndex + 1}. ${t(level.nameKey)}`, {
+      size: 14,
+      color: UI.dim,
+    }).setDepth(10);
+    this.timerText = makeText(this, VIEW_WIDTH / 2, 8, '00:00', { size: 15 })
       .setOrigin(0.5, 0)
       .setDepth(10);
-    this.add
-      .text(VIEW_WIDTH - 12, 10, t('game.menuHint'), {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: UI.dim,
-      })
+    makeText(this, VIEW_WIDTH - 12, 8, t('game.menuHint'), { size: 12, color: UI.dim })
       .setOrigin(1, 0)
       .setDepth(10);
+    this.fpsText = makeText(this, VIEW_WIDTH - 12, 28, '', { size: 12, color: UI.accent })
+      .setOrigin(1, 0)
+      .setDepth(10)
+      .setVisible(this.showFps);
 
     const colors: PlayerColor[] = ['blue', 'red'];
     colors.forEach((color, i) => {
-      this.cloneTexts[color] = this.add
-        .text(12 + i * 130, 32, '', {
-          fontFamily: 'monospace',
-          fontSize: '13px',
-          color: `#${PLAYER_TINTS[color].toString(16).padStart(6, '0')}`,
-        })
-        .setDepth(10);
+      this.cloneTexts[color] = makeText(this, 12 + i * 132, 28, '', {
+        size: 12,
+        color: `#${PLAYER_TINTS[color].toString(16).padStart(6, '0')}`,
+      }).setDepth(10);
+    });
+  }
+
+  /** Level-name banner easing in and out at the start. */
+  private announceLevel(): void {
+    const banner = makeText(
+      this,
+      VIEW_WIDTH / 2,
+      VIEW_HEIGHT / 2 - 60,
+      `${this.levelIndex + 1}. ${t(this.session.level.nameKey)}`,
+      { size: 30, bold: true },
+    )
+      .setOrigin(0.5)
+      .setDepth(20)
+      .setAlpha(0);
+    this.tweens.add({
+      targets: banner,
+      alpha: { from: 0, to: 1 },
+      y: VIEW_HEIGHT / 2 - 70,
+      duration: 320,
+      ease: 'Quad.easeOut',
+      hold: 750,
+      yoyo: true,
+      onComplete: () => banner.destroy(),
     });
   }
 
@@ -115,14 +143,10 @@ export class GameScene extends Phaser.Scene {
       this.levelRenderer.render(snapshot);
       this.updateHud(snapshot, delta);
     }
+    this.session.consumeEvents(); // renderer diffing owns the FX now
 
-    for (const event of this.session.consumeEvents()) {
-      if (event.type === 'levelReset') {
-        this.cameras.main.flash(220, 255, 60, 60);
-      }
-      if (event.type === 'clonePlaced') {
-        this.cameras.main.shake(60, 0.002);
-      }
+    if (this.showFps) {
+      this.fpsText.setText(`${Math.round(this.game.loop.actualFps)} fps`);
     }
 
     const status = this.session.status();
@@ -131,6 +155,7 @@ export class GameScene extends Phaser.Scene {
       this.showComplete();
     } else if (status.kind === 'nextLevel') {
       const online = this.session as OnlineSession;
+      this.ended = true;
       online.advanceTo(status.level);
       this.scene.restart({ mode: 'online', session: online });
     } else if (status.kind === 'peerLeft' && !this.overlayShown) {
@@ -140,7 +165,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateHud(snapshot: SimulationSnapshot, delta: number): void {
-    this.elapsedMs += delta;
+    if (!this.overlayShown) this.elapsedMs += delta;
     const total = Math.floor(this.elapsedMs / 1000);
     const mm = String(Math.floor(total / 60)).padStart(2, '0');
     const ss = String(total % 60).padStart(2, '0');
@@ -149,92 +174,76 @@ export class GameScene extends Phaser.Scene {
     const limit = this.session.level.cloneLimitPerPlayer;
     for (const color of ['blue', 'red'] as PlayerColor[]) {
       const used = snapshot.clones.filter((c) => c.owner === color).length;
-      this.cloneTexts[color]?.setText(`${color === 'blue' ? 'P1' : 'P2'} ${t('game.clones')}: ${used}/${limit}`);
+      this.cloneTexts[color]?.setText(
+        `${color === 'blue' ? 'P1' : 'P2'} ${t('game.clones')}: ${used}/${limit}`,
+      );
     }
   }
 
-  private dimBackground(): void {
-    this.add
-      .rectangle(VIEW_WIDTH / 2, VIEW_HEIGHT / 2, VIEW_WIDTH, VIEW_HEIGHT, 0x000000, 0.6)
-      .setDepth(20);
+  private overlayPieces(main: string, hint: string): void {
+    const dim = this.add
+      .rectangle(VIEW_WIDTH / 2, VIEW_HEIGHT / 2, VIEW_WIDTH, VIEW_HEIGHT, 0x000000, 0)
+      .setDepth(19);
+    this.tweens.add({ targets: dim, fillAlpha: 0.55, duration: 280 });
+
+    const title = makeText(this, VIEW_WIDTH / 2, VIEW_HEIGHT / 2 - 34, main, {
+      size: 34,
+      bold: true,
+      color: UI.accent,
+    })
+      .setOrigin(0.5)
+      .setDepth(21)
+      .setScale(0.6)
+      .setAlpha(0);
+    this.tweens.add({
+      targets: title,
+      scale: 1,
+      alpha: 1,
+      duration: 320,
+      ease: 'Back.easeOut',
+    });
+    if (hint) {
+      const sub = makeText(this, VIEW_WIDTH / 2, VIEW_HEIGHT / 2 + 22, hint, { size: 16 })
+        .setOrigin(0.5)
+        .setDepth(21)
+        .setAlpha(0);
+      this.tweens.add({ targets: sub, alpha: 1, duration: 300, delay: 250 });
+    }
   }
 
   private showComplete(): void {
-    this.dimBackground();
-    const cx = VIEW_WIDTH / 2;
+    this.levelRenderer.celebrate();
     const isLast = this.levelIndex >= LEVELS.length - 1;
 
     if (this.session.mode === 'local') {
       recordLevelComplete(this.levelIndex);
-      this.add
-        .text(cx, VIEW_HEIGHT / 2 - 30, isLast ? t('game.finished') : t('game.complete'), {
-          fontFamily: 'monospace',
-          fontSize: '34px',
-          color: UI.accent,
-        })
-        .setOrigin(0.5)
-        .setDepth(21);
-      this.add
-        .text(cx, VIEW_HEIGHT / 2 + 25, isLast ? t('game.finishedHint') : t('game.nextHint'), {
-          fontFamily: 'monospace',
-          fontSize: '16px',
-          color: UI.text,
-        })
-        .setOrigin(0.5)
-        .setDepth(21);
+      this.overlayPieces(
+        isLast ? t('game.finished') : t('game.complete'),
+        isLast ? t('game.finishedHint') : t('game.nextHint'),
+      );
       this.input.keyboard!.once('keydown-SPACE', () => {
         this.ended = true;
         if (isLast) {
-          this.scene.start('Menu');
+          goTo(this, 'Menu');
         } else {
-          this.scene.restart({ mode: 'local', levelIndex: this.levelIndex + 1 });
+          this.cameras.main.fadeOut(160, 10, 11, 14);
+          this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+            this.scene.restart({ mode: 'local', levelIndex: this.levelIndex + 1 });
+          });
         }
       });
     } else {
-      // Online: the server drives the next level; just tell the players.
-      this.add
-        .text(cx, VIEW_HEIGHT / 2 - 30, isLast ? t('game.finished') : t('game.complete'), {
-          fontFamily: 'monospace',
-          fontSize: '34px',
-          color: UI.accent,
-        })
-        .setOrigin(0.5)
-        .setDepth(21);
-      this.add
-        .text(cx, VIEW_HEIGHT / 2 + 25, isLast ? '' : t('game.nextOnline'), {
-          fontFamily: 'monospace',
-          fontSize: '16px',
-          color: UI.text,
-        })
-        .setOrigin(0.5)
-        .setDepth(21);
-      // keep polling status(): the server will send the next gameStart
-      this.overlayShown = true;
-      this.time.addEvent({
-        delay: 100,
-        loop: true,
-        callback: () => {
-          const status = this.session.status();
-          if (status.kind === 'nextLevel') {
-            const online = this.session as OnlineSession;
-            online.advanceTo(status.level);
-            this.scene.restart({ mode: 'online', session: online });
-          }
-        },
-      });
+      // Online: the server schedules the next level; update() will catch the
+      // nextLevel status and restart the scene.
+      this.overlayPieces(
+        isLast ? t('game.finished') : t('game.complete'),
+        isLast ? '' : t('game.nextOnline'),
+      );
     }
   }
 
   private showPeerLeft(): void {
-    this.dimBackground();
-    this.add
-      .text(VIEW_WIDTH / 2, VIEW_HEIGHT / 2, t('game.peerLeft'), {
-        fontFamily: 'monospace',
-        fontSize: '26px',
-        color: UI.accent,
-      })
-      .setOrigin(0.5)
-      .setDepth(21);
+    this.overlayPieces(t('game.peerLeft'), '');
     this.time.delayedCall(2500, () => this.quitToMenu());
   }
 }

@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
+import { ensureGameTextures } from '../render/textures';
 
-/** No assets to preload yet (everything is vector) — go straight to the menu. */
+/** Generates the canvas-drawn textures, then heads to the menu. */
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
   }
 
   create(): void {
+    ensureGameTextures(this);
     this.scene.start('Menu');
   }
 }

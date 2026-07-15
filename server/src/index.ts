@@ -63,6 +63,7 @@ wss.on('connection', (socket) => {
           code: result.code,
           yourColor: color,
           lobby: result.lobbySnapshot(),
+          levelId: result.levelId,
         });
         break;
       }
@@ -85,13 +86,20 @@ wss.on('connection', (socket) => {
           code: room.code,
           yourColor: color,
           lobby: room.lobbySnapshot(),
+          levelId: room.levelId,
         });
-        room.broadcast({ type: 'lobbyState', lobby: room.lobbySnapshot() });
+        room.broadcast({ type: 'lobbyState', lobby: room.lobbySnapshot(), levelId: room.levelId });
         break;
       }
       case 'setReady': {
         if (session.room && session.color) {
           session.room.setReady(session.color, message.ready === true);
+        }
+        break;
+      }
+      case 'selectLevel': {
+        if (session.room && session.color) {
+          session.room.selectLevel(session.color, message.levelId);
         }
         break;
       }

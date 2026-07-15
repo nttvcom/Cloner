@@ -1,6 +1,8 @@
 import {
   getLevelById,
   LEVELS,
+  PLAYER_COLORS,
+  SNAPSHOT_SEND_RATE,
   type LevelDefinition,
   type PlayerInput,
   type SimEvent,
@@ -11,6 +13,7 @@ import type { OnlineClient } from '../net/OnlineClient';
 import type { GameSession, SessionStatus } from './GameSession';
 
 const INPUT_KEEPALIVE_MS = 100;
+const SNAPSHOT_INTERVAL_MS = 1000 / SNAPSHOT_SEND_RATE;
 
 function sameInput(a: PlayerInput, b: PlayerInput): boolean {
   return (
@@ -22,33 +25,45 @@ function sameInput(a: PlayerInput, b: PlayerInput): boolean {
   );
 }
 
+interface TimedSnapshot {
+  snap: SimulationSnapshot;
+  at: number;
+}
+
 /**
- * Online co-op: sends this player's input upstream, renders whatever
- * snapshot the authoritative server last broadcast.
+ * Online co-op: sends this player's input upstream and renders the
+ * authoritative server snapshots. Snapshots arrive at 20Hz but we render at
+ * frame rate, so positions are interpolated between the two latest
+ * snapshots (~one snapshot interval of added latency, in exchange for
+ * motion as smooth as local play).
  */
 export class OnlineSession implements GameSession {
   readonly mode = 'online' as const;
   level: LevelDefinition;
 
   private readonly client: OnlineClient;
-  private latest: SimulationSnapshot | null = null;
+  private prevSnap: TimedSnapshot | null = null;
+  private latestSnap: TimedSnapshot | null = null;
   private lastSent: PlayerInput | null = null;
   private sinceSendMs = 0;
   private tickGuess = 0;
   private state: SessionStatus = { kind: 'playing' };
   private events: SimEvent[] = [];
-  private lastTick = -1;
 
   constructor(client: OnlineClient, levelId: string) {
     this.client = client;
     this.level = getLevelById(levelId) ?? LEVELS[0]!;
     client.on('snapshot', (snapshot) => {
-      // A tick that went backwards means the server reset the level (death).
-      if (this.lastTick >= 0 && snapshot.tick < this.lastTick) {
+      const now = performance.now();
+      if (this.latestSnap && snapshot.tick < this.latestSnap.snap.tick) {
+        // The server reset the level (someone died): don't lerp across it.
         this.events.push({ type: 'levelReset' });
+        this.prevSnap = null;
+        this.latestSnap = { snap: snapshot, at: now };
+        return;
       }
-      this.lastTick = snapshot.tick;
-      this.latest = snapshot;
+      this.prevSnap = this.latestSnap;
+      this.latestSnap = { snap: snapshot, at: now };
     });
     client.on('levelComplete', () => {
       this.state = { kind: 'complete' };
@@ -71,8 +86,8 @@ export class OnlineSession implements GameSession {
   /** Called by GameScene when it restarts into the next level. */
   advanceTo(level: LevelDefinition): void {
     this.level = level;
-    this.latest = null;
-    this.lastTick = -1;
+    this.prevSnap = null;
+    this.latestSnap = null;
     this.state = { kind: 'playing' };
   }
 
@@ -91,7 +106,42 @@ export class OnlineSession implements GameSession {
   }
 
   snapshot(): SimulationSnapshot | null {
-    return this.latest;
+    const latest = this.latestSnap;
+    if (!latest) return null;
+    const prev = this.prevSnap;
+    if (!prev) return latest.snap;
+
+    // Ease from the previous snapshot toward the latest over one send
+    // interval after the latest arrived.
+    const t = Math.min(1, Math.max(0, (performance.now() - latest.at) / SNAPSHOT_INTERVAL_MS));
+    if (t >= 1) return latest.snap;
+
+    const out: SimulationSnapshot = {
+      ...latest.snap,
+      players: { ...latest.snap.players },
+      platforms: { ...latest.snap.platforms },
+    };
+    for (const color of PLAYER_COLORS) {
+      const a = prev.snap.players[color];
+      const b = latest.snap.players[color];
+      out.players[color] = {
+        ...b,
+        position: {
+          x: a.position.x + (b.position.x - a.position.x) * t,
+          y: a.position.y + (b.position.y - a.position.y) * t,
+        },
+      };
+    }
+    for (const [id, to] of Object.entries(latest.snap.platforms)) {
+      const from = prev.snap.platforms[id];
+      if (from) {
+        out.platforms[id] = {
+          x: from.x + (to.x - from.x) * t,
+          y: from.y + (to.y - from.y) * t,
+        };
+      }
+    }
+    return out;
   }
 
   consumeEvents(): SimEvent[] {
@@ -104,10 +154,17 @@ export class OnlineSession implements GameSession {
     return this.state;
   }
 
+  /** Leave the room cleanly (ESC from a game). */
+  leave(): void {
+    this.client.send({ type: 'leaveRoom' });
+    this.client.disconnect();
+  }
+
   dispose(): void {
     this.client.off('snapshot');
     this.client.off('levelComplete');
     this.client.off('gameStart');
     this.client.off('peerLeft');
+    this.client.off('disconnected');
   }
 }
