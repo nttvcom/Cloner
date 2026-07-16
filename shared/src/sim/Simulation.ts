@@ -34,7 +34,7 @@ function pressed(now: boolean, before: boolean): boolean {
 }
 
 /** Pause at each end of a powered elevator's run — riders board/leave calmly. */
-const ELEVATOR_DWELL_TICKS = 66; // ~1.1s
+const ELEVATOR_DWELL_TICKS = 102; // ~1.7s
 
 interface PlatformRuntime {
   def: MovingPlatformDef | ElevatorDef;

@@ -123,28 +123,34 @@ const LEVEL_05: LevelDefinition = {
 };
 
 /**
- * 6 — the elevator. Spawns sit right next to the lift so the
- * place-teleport-run-board loop is comfortable: one clone powers the lift,
- * the other holds the door on the upper ledge open. Both players ride.
+ * 6 — the elevator. The lift rides in a notch in the floor so its deck is
+ * flush with the ground at the bottom (seamless boarding, no timing tricks).
+ * One clone powers the lift, the other holds the upper gate open; both
+ * players then ride up to the shared double exit. The powered lift shuttles,
+ * so whoever placed the power clone can still catch the next trip up.
  */
 const LEVEL_06: LevelDefinition = {
   id: 'level-06',
   nameKey: 'level.06.name',
   cloneLimitPerPlayer: 1,
-  spawns: { blue: { x: 500, y: FLOOR_TOP - 28 }, red: { x: 540, y: FLOOR_TOP - 28 } },
-  solids: [fullFloor, { x: 674, y: 240, width: 286, height: 20 }],
+  spawns: { blue: { x: 360, y: FLOOR_TOP - 28 }, red: { x: 420, y: FLOOR_TOP - 28 } },
+  solids: [
+    { x: 0, y: FLOOR_TOP, width: 580, height: FLOOR_H }, // floor left of the shaft
+    { x: 670, y: FLOOR_TOP, width: 290, height: FLOOR_H }, // floor right of the shaft
+    { x: 670, y: 240, width: 290, height: 20 }, // upper ledge, flush with the lift's right edge
+  ],
   objects: [
-    { kind: 'button', id: 'plate-lift', position: { x: 380, y: PLATE_Y }, targets: ['lift'] },
-    { kind: 'button', id: 'plate-door', position: { x: 300, y: PLATE_Y }, targets: ['gate-top'] },
+    { kind: 'button', id: 'plate-lift', position: { x: 300, y: PLATE_Y }, targets: ['lift'] },
+    { kind: 'button', id: 'plate-door', position: { x: 180, y: PLATE_Y }, targets: ['gate-top'] },
     {
       kind: 'elevator',
       id: 'lift',
       size: { width: 90, height: 14 },
-      from: { x: 580, y: 486 },
-      to: { x: 580, y: 240 },
+      from: { x: 580, y: FLOOR_TOP }, // deck flush with the floor at the bottom
+      to: { x: 580, y: 240 }, // deck level with the upper ledge at the top
       speed: 60,
     },
-    { kind: 'door', id: 'gate-top', bounds: { x: 780, y: 140, width: 20, height: 100 } },
+    { kind: 'door', id: 'gate-top', bounds: { x: 782, y: 140, width: 20, height: 100 } },
     { kind: 'exit', id: 'exit-double', color: 'double', bounds: { x: 860, y: 196, width: 72, height: EXIT_H } },
   ],
 };
@@ -253,29 +259,38 @@ const LEVEL_10: LevelDefinition = {
 };
 
 /**
- * 11 — beam rider. A laser crosses the lift shaft at height 346; a clone
- * placed ON the lift deck rides along and shields everyone standing behind
- * it. The second clone powers the lift from the plate.
+ * 11 — beam rider (reworked to be fair). A laser sweeps the exit ledge at
+ * standing height, so anyone arriving up there without cover dies instantly.
+ * The two floor plates fix that from safety: one clone powers the lift, the
+ * other SUPPRESSES the beam. With both parked, the pair ride up under a dead
+ * beam and walk to their exits. Neither clone alone is enough — the lift needs
+ * power AND the ledge needs to be safe.
  */
 const LEVEL_11: LevelDefinition = {
   id: 'level-11',
   nameKey: 'level.11.name',
   cloneLimitPerPlayer: 1,
-  spawns: { blue: { x: 500, y: FLOOR_TOP - 28 }, red: { x: 530, y: FLOOR_TOP - 28 } },
-  solids: [fullFloor, { x: 654, y: 200, width: 306, height: 20 }],
+  spawns: { blue: { x: 470, y: FLOOR_TOP - 28 }, red: { x: 510, y: FLOOR_TOP - 28 } },
+  solids: [
+    { x: 0, y: FLOOR_TOP, width: 560, height: FLOOR_H }, // floor left of the shaft
+    { x: 650, y: FLOOR_TOP, width: 310, height: FLOOR_H }, // floor right of the shaft
+    { x: 650, y: 240, width: 310, height: 20 }, // exit ledge, flush with the lift
+  ],
   objects: [
-    { kind: 'button', id: 'plate-lift', position: { x: 450, y: PLATE_Y }, targets: ['lift'] },
+    { kind: 'button', id: 'plate-suppress', position: { x: 180, y: PLATE_Y }, targets: ['zap'] },
+    { kind: 'button', id: 'plate-lift', position: { x: 300, y: PLATE_Y }, targets: ['lift'] },
     {
       kind: 'elevator',
       id: 'lift',
       size: { width: 90, height: 14 },
-      from: { x: 560, y: 486 },
-      to: { x: 560, y: 200 },
-      speed: 70,
+      from: { x: 560, y: FLOOR_TOP }, // deck flush with the floor at the bottom
+      to: { x: 560, y: 240 }, // deck level with the exit ledge at the top
+      speed: 65,
     },
-    { kind: 'laser', id: 'zap', origin: { x: 952, y: 346 }, direction: 'left' },
-    { kind: 'exit', id: 'exit-blue', color: 'blue', bounds: { x: 750, y: 200 - EXIT_H, width: EXIT_W, height: EXIT_H } },
-    { kind: 'exit', id: 'exit-red', color: 'red', bounds: { x: 850, y: 200 - EXIT_H, width: EXIT_W, height: EXIT_H } },
+    // Sweeps the ledge 14px above its surface — lethal to anyone standing there.
+    { kind: 'laser', id: 'zap', origin: { x: 952, y: 226 }, direction: 'left' },
+    { kind: 'exit', id: 'exit-blue', color: 'blue', bounds: { x: 720, y: 240 - EXIT_H, width: EXIT_W, height: EXIT_H } },
+    { kind: 'exit', id: 'exit-red', color: 'red', bounds: { x: 830, y: 240 - EXIT_H, width: EXIT_W, height: EXIT_H } },
   ],
 };
 
@@ -318,33 +333,35 @@ const LEVEL_13: LevelDefinition = {
 };
 
 /**
- * 14 — stop the lift: a clone placed on the overhanging ledge JAMS the
- * rising elevator, turning it into a bridge at ledge height. Requires the
- * clone stack to reach the overhang, a jam clone, and one player holding
- * the power plate. Exits split: blue high, red low.
+ * 14 — ascent: the lift (in a floor notch) reaches a ledge whose approach is
+ * drilled by a ceiling laser, and the goal is a shared DOUBLE exit past it.
+ * One clone powers the lift, the other suppresses the beam; then both ride up
+ * and meet in the exit. Plates sit right of spawn with the lift to the left,
+ * so a placed clone never blocks the partner's run to the lift.
  */
 const LEVEL_14: LevelDefinition = {
   id: 'level-14',
   nameKey: 'level.14.name',
-  cloneLimitPerPlayer: 2,
-  spawns: { blue: { x: 40, y: FLOOR_TOP - 28 }, red: { x: 80, y: FLOOR_TOP - 28 } },
+  cloneLimitPerPlayer: 1,
+  spawns: { blue: { x: 680, y: FLOOR_TOP - 28 }, red: { x: 712, y: FLOOR_TOP - 28 } },
   solids: [
-    fullFloor,
-    { x: 350, y: 360, width: 110, height: 14 }, // overhang: pokes into the shaft (450..460)
-    { x: 550, y: 360, width: 160, height: 14 }, // landing ledge with blue's exit
+    { x: 0, y: FLOOR_TOP, width: 560, height: FLOOR_H },
+    { x: 650, y: FLOOR_TOP, width: 310, height: FLOOR_H },
+    { x: 0, y: 240, width: 560, height: 20 }, // exit ledge, flush with the lift
   ],
   objects: [
-    { kind: 'button', id: 'plate-w', position: { x: 150, y: PLATE_Y }, targets: ['lift'] },
+    { kind: 'button', id: 'plate-lift', position: { x: 800, y: PLATE_Y }, targets: ['lift'] },
+    { kind: 'button', id: 'plate-suppress', position: { x: 880, y: PLATE_Y }, targets: ['zap'] },
     {
       kind: 'elevator',
       id: 'lift',
-      size: { width: 100, height: 14 },
-      from: { x: 450, y: 486 },
-      to: { x: 450, y: 160 },
-      speed: 80,
+      size: { width: 90, height: 14 },
+      from: { x: 560, y: FLOOR_TOP },
+      to: { x: 560, y: 240 },
+      speed: 60,
     },
-    { kind: 'exit', id: 'exit-blue', color: 'blue', bounds: { x: 610, y: 360 - EXIT_H, width: EXIT_W, height: EXIT_H } },
-    { kind: 'exit', id: 'exit-red', color: 'red', bounds: { x: 200, y: FLOOR_EXIT_Y, width: EXIT_W, height: EXIT_H } },
+    { kind: 'laser', id: 'zap', origin: { x: 330, y: 180 }, direction: 'down' },
+    { kind: 'exit', id: 'exit-double', color: 'double', bounds: { x: 110, y: 240 - EXIT_H, width: 80, height: EXIT_H } },
   ],
 };
 
@@ -411,64 +428,73 @@ const LEVEL_17: LevelDefinition = {
 };
 
 /**
- * 18 — the conveyor: spawns are on the RIGHT. One clone powers the lift,
- * the ledge above is swept by a ceiling laser — the shield clone is placed
- * on the ledge while the partner holds the suppressor plate below.
+ * 18 — the conveyor: spawns are on the RIGHT, plates further right, lift to
+ * the left — so a placed clone (its solid outline blocks the OTHER player) is
+ * always behind the pair as they head for the lift. One clone powers the lift,
+ * the other suppresses the ceiling laser that sweeps the exit ledge; the pair
+ * then ride up in a floor notch and walk left under the dead beam.
  */
 const LEVEL_18: LevelDefinition = {
   id: 'level-18',
   nameKey: 'level.18.name',
   cloneLimitPerPlayer: 1,
-  spawns: { blue: { x: 790, y: FLOOR_TOP - 28 }, red: { x: 705, y: FLOOR_TOP - 28 } },
-  solids: [{ x: 700, y: FLOOR_TOP, width: 260, height: FLOOR_H }, { x: 480, y: 240, width: 340, height: 20 }],
+  spawns: { blue: { x: 680, y: FLOOR_TOP - 28 }, red: { x: 712, y: FLOOR_TOP - 28 } },
+  solids: [
+    { x: 0, y: FLOOR_TOP, width: 560, height: FLOOR_H }, // floor left of the shaft
+    { x: 650, y: FLOOR_TOP, width: 310, height: FLOOR_H }, // floor right of the shaft
+    { x: 0, y: 240, width: 560, height: 20 }, // exit ledge, flush with the lift
+  ],
   objects: [
-    { kind: 'button', id: 'plate-lift', position: { x: 740, y: PLATE_Y }, targets: ['lift'] },
-    { kind: 'button', id: 'safety', position: { x: 908, y: PLATE_Y }, targets: ['zap'] },
+    { kind: 'button', id: 'plate-lift', position: { x: 800, y: PLATE_Y }, targets: ['lift'] },
+    { kind: 'button', id: 'plate-suppress', position: { x: 880, y: PLATE_Y }, targets: ['zap'] },
     {
       kind: 'elevator',
       id: 'lift',
       size: { width: 90, height: 14 },
-      from: { x: 830, y: 486 },
-      to: { x: 830, y: 240 },
+      from: { x: 560, y: FLOOR_TOP }, // deck flush with the floor at the bottom
+      to: { x: 560, y: 240 }, // deck level with the exit ledge at the top
       speed: 60,
     },
-    { kind: 'laser', id: 'zap', origin: { x: 600, y: 180 }, direction: 'down' },
-    { kind: 'exit', id: 'exit-blue', color: 'blue', bounds: { x: 500, y: 240 - EXIT_H, width: EXIT_W, height: EXIT_H } },
-    { kind: 'exit', id: 'exit-red', color: 'red', bounds: { x: 550, y: 240 - EXIT_H, width: EXIT_W, height: EXIT_H } },
+    // Ceiling beam drilling down onto the ledge between the exits and the lift.
+    { kind: 'laser', id: 'zap', origin: { x: 300, y: 180 }, direction: 'down' },
+    { kind: 'exit', id: 'exit-blue', color: 'blue', bounds: { x: 80, y: 240 - EXIT_H, width: EXIT_W, height: EXIT_H } },
+    { kind: 'exit', id: 'exit-red', color: 'red', bounds: { x: 180, y: 240 - EXIT_H, width: EXIT_W, height: EXIT_H } },
   ],
 };
 
 /**
- * 19 — clockwork: the unwired lift launches immediately, so it must be
- * JAMMED low from the reachable perch, loaded with a shield clone on each
- * half of the deck (each player re-boards via the perch while the jam
- * holds), then released with F. The twin side beams are blocked by the two
- * riding clones; players squeeze between them.
+ * 19 — crossfire: TWO ceiling lasers rake the exit ledge, so three clone jobs
+ * are needed — power the lift and suppress both beams — but only two players.
+ * With a clone limit of two, one player spends both clones (power + one beam)
+ * while the partner suppresses the other; then the pair ride up and split to
+ * their exits under dead beams.
  */
 const LEVEL_19: LevelDefinition = {
   id: 'level-19',
   nameKey: 'level.19.name',
   cloneLimitPerPlayer: 2,
-  spawns: { blue: { x: 340, y: FLOOR_TOP - 28 }, red: { x: 380, y: FLOOR_TOP - 28 } },
+  spawns: { blue: { x: 680, y: FLOOR_TOP - 28 }, red: { x: 712, y: FLOOR_TOP - 28 } },
   solids: [
-    fullFloor,
-    { x: 380, y: 438, width: 80, height: 14 }, // perch overhanging the shaft
-    { x: 320, y: 220, width: 130, height: 20 }, // top-left ledge (blue exit)
-    { x: 550, y: 220, width: 130, height: 20 }, // top-right ledge (red exit)
+    { x: 0, y: FLOOR_TOP, width: 560, height: FLOOR_H },
+    { x: 650, y: FLOOR_TOP, width: 310, height: FLOOR_H },
+    { x: 0, y: 240, width: 560, height: 20 }, // exit ledge, flush with the lift
   ],
   objects: [
+    { kind: 'button', id: 'plate-lift', position: { x: 760, y: PLATE_Y }, targets: ['lift'] },
+    { kind: 'button', id: 'plate-zapA', position: { x: 840, y: PLATE_Y }, targets: ['zapA'] },
+    { kind: 'button', id: 'plate-zapB', position: { x: 920, y: PLATE_Y }, targets: ['zapB'] },
     {
       kind: 'elevator',
       id: 'lift',
-      size: { width: 100, height: 14 },
-      from: { x: 450, y: 486 },
-      to: { x: 450, y: 220 },
-      speed: 30,
+      size: { width: 90, height: 14 },
+      from: { x: 560, y: FLOOR_TOP },
+      to: { x: 560, y: 240 },
+      speed: 60,
     },
-    { kind: 'laser', id: 'beam-left', origin: { x: 8, y: 370 }, direction: 'right' },
-    { kind: 'laser', id: 'beam-right', origin: { x: 952, y: 300 }, direction: 'left' },
-    { kind: 'exit', id: 'exit-blue', color: 'blue', bounds: { x: 350, y: 220 - EXIT_H, width: EXIT_W, height: EXIT_H } },
-    { kind: 'exit', id: 'exit-red', color: 'red', bounds: { x: 600, y: 220 - EXIT_H, width: EXIT_W, height: EXIT_H } },
+    { kind: 'laser', id: 'zapA', origin: { x: 200, y: 180 }, direction: 'down' },
+    { kind: 'laser', id: 'zapB', origin: { x: 420, y: 180 }, direction: 'down' },
+    { kind: 'exit', id: 'exit-blue', color: 'blue', bounds: { x: 60, y: 240 - EXIT_H, width: EXIT_W, height: EXIT_H } },
+    { kind: 'exit', id: 'exit-red', color: 'red', bounds: { x: 300, y: 240 - EXIT_H, width: EXIT_W, height: EXIT_H } },
   ],
 };
 
