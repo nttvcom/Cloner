@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PLAYER_SIZE, type PlayerColor } from '@cloner/shared';
+import { BUTTON_HEIGHT, BUTTON_WIDTH, PLAYER_SIZE, type PlayerColor } from '@cloner/shared';
 
 /**
  * Player/clone art per the designer's reference: rounded plate with a
@@ -177,4 +177,104 @@ export function ensureGameTextures(scene: Phaser.Scene): void {
       scene.textures.addCanvas(cloneTextureKey(color), drawClone(color));
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Environment textures (doors, platforms, button plates) — same Canvas2D
+// approach, same palette as colors.ts, generated per-size on demand.
+// ---------------------------------------------------------------------------
+
+const ENV_ART = 4;
+
+/** Roller-shutter door panel: horizontal slats, dark side rails. */
+export function ensureDoorTexture(scene: Phaser.Scene, w: number, h: number): string {
+  const key = `door-${w}x${h}`;
+  if (scene.textures.exists(key)) return key;
+  const cw = w * ENV_ART;
+  const ch = h * ENV_ART;
+  const [canvas, ctx] = makeCanvas2(cw, ch);
+
+  const grad = ctx.createLinearGradient(0, 0, cw, 0);
+  grad.addColorStop(0, '#a06f24');
+  grad.addColorStop(0.5, '#d29538');
+  grad.addColorStop(1, '#a06f24');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Slats: the door reads as a shutter that retracts upward.
+  const slat = 12 * ENV_ART;
+  for (let y = 0; y < ch; y += slat) {
+    ctx.fillStyle = 'rgba(255, 220, 140, 0.35)';
+    ctx.fillRect(0, y, cw, 2 * ENV_ART);
+    ctx.fillStyle = 'rgba(60, 38, 8, 0.35)';
+    ctx.fillRect(0, y + slat - 1.5 * ENV_ART, cw, 1.5 * ENV_ART);
+  }
+  // Side rails.
+  ctx.fillStyle = '#6e4c16';
+  ctx.fillRect(0, 0, 2.5 * ENV_ART, ch);
+  ctx.fillRect(cw - 2.5 * ENV_ART, 0, 2.5 * ENV_ART, ch);
+  scene.textures.addCanvas(key, canvas);
+  return key;
+}
+
+/** Metal deck for moving platforms and elevators. */
+export function ensurePlatformTexture(scene: Phaser.Scene, w: number, h: number): string {
+  const key = `plat-${w}x${h}`;
+  if (scene.textures.exists(key)) return key;
+  const cw = w * ENV_ART;
+  const ch = h * ENV_ART;
+  const [canvas, ctx] = makeCanvas2(cw, ch);
+
+  const grad = ctx.createLinearGradient(0, 0, 0, ch);
+  grad.addColorStop(0, '#9aa4b6');
+  grad.addColorStop(0.35, '#7a8496');
+  grad.addColorStop(1, '#59616f');
+  ctx.fillStyle = grad;
+  roundedRectPath(ctx, 0, 0, cw, ch, 2 * ENV_ART);
+  ctx.fill();
+  // Bright walking surface.
+  ctx.fillStyle = '#c3cad8';
+  ctx.fillRect(1.5 * ENV_ART, 0, cw - 3 * ENV_ART, 1.5 * ENV_ART);
+  // Tread marks.
+  ctx.fillStyle = 'rgba(30, 34, 42, 0.4)';
+  const step = 14 * ENV_ART;
+  for (let x = step / 2; x < cw - 4; x += step) {
+    ctx.fillRect(x, 3 * ENV_ART, 4 * ENV_ART, 1 * ENV_ART);
+  }
+  // End caps.
+  ctx.fillStyle = 'rgba(255, 209, 102, 0.75)';
+  ctx.fillRect(0, 0, 1.2 * ENV_ART, ch);
+  ctx.fillRect(cw - 1.2 * ENV_ART, 0, 1.2 * ENV_ART, ch);
+  scene.textures.addCanvas(key, canvas);
+  return key;
+}
+
+/** Pressure-plate top: idle (bright) and pressed (dark) variants. */
+export function ensurePlateTextures(scene: Phaser.Scene): { idle: string; pressed: string } {
+  const keys = { idle: 'plate-idle', pressed: 'plate-pressed' };
+  if (scene.textures.exists(keys.idle)) return keys;
+  const cw = BUTTON_WIDTH * ENV_ART;
+  const ch = BUTTON_HEIGHT * ENV_ART;
+  const draw = (top: string, bottom: string, rim: string): HTMLCanvasElement => {
+    const [canvas, ctx] = makeCanvas2(cw, ch);
+    const grad = ctx.createLinearGradient(0, 0, 0, ch);
+    grad.addColorStop(0, top);
+    grad.addColorStop(1, bottom);
+    ctx.fillStyle = grad;
+    roundedRectPath(ctx, 0, 0, cw, ch, 2.5 * ENV_ART);
+    ctx.fill();
+    ctx.fillStyle = rim;
+    ctx.fillRect(1.5 * ENV_ART, 0.6 * ENV_ART, cw - 3 * ENV_ART, 1.2 * ENV_ART);
+    return canvas;
+  };
+  scene.textures.addCanvas(keys.idle, draw('#a8e06a', '#6ba635', 'rgba(255,255,255,0.5)'));
+  scene.textures.addCanvas(keys.pressed, draw('#5f9431', '#3f6520', 'rgba(255,255,255,0.18)'));
+  return keys;
+}
+
+function makeCanvas2(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  return [canvas, canvas.getContext('2d')!];
 }

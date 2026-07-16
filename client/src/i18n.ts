@@ -27,6 +27,7 @@ const en: Record<string, string> = {
     '',
     'Player 1: WASD move · E place clone · F remove',
     'Player 2: Arrows move · K place clone · L remove',
+    'R — restart the level · ESC — menu',
   ].join('\n'),
   'help.back': 'Back',
 
@@ -63,7 +64,7 @@ const en: Record<string, string> = {
   'game.finishedHint': 'press SPACE to return to the menu',
   'game.nextOnline': 'next level starting…',
   'game.peerLeft': 'The other player disconnected',
-  'game.menuHint': 'ESC — menu',
+  'game.menuHint': 'R — restart · ESC — menu',
   'game.clones': 'clones',
 
   'level.01.name': 'First Clone',
@@ -114,6 +115,7 @@ const ru: Record<string, string> = {
     '',
     'Игрок 1: WASD — движение · E — клон · F — убрать',
     'Игрок 2: стрелки — движение · K — клон · L — убрать',
+    'R — перезапуск уровня · ESC — меню',
   ].join('\n'),
   'help.back': 'Назад',
 
@@ -150,7 +152,7 @@ const ru: Record<string, string> = {
   'game.finishedHint': 'SPACE — вернуться в меню',
   'game.nextOnline': 'следующий уровень запускается…',
   'game.peerLeft': 'Второй игрок отключился',
-  'game.menuHint': 'ESC — меню',
+  'game.menuHint': 'R — рестарт · ESC — меню',
   'game.clones': 'клоны',
 
   'level.01.name': 'Первый клон',

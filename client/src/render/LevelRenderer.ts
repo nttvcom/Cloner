@@ -4,6 +4,8 @@ import {
   BUTTON_WIDTH,
   LASER_EMITTER_SIZE,
   PLAYER_SIZE,
+  VIEW_HEIGHT,
+  VIEW_WIDTH,
   aabbIntersects,
   beamObstaclesFromSnapshot,
   computeLaserBeam,
@@ -14,8 +16,15 @@ import {
   type SimulationSnapshot,
   type Vec2,
 } from '@cloner/shared';
-import { EXIT_TINTS, PLAYER_TINTS, WORLD } from '../colors';
-import { cloneTextureKey, ensureGameTextures, playerTextureKey } from './textures';
+import { EXIT_TINTS, PLAYER_TINTS, UI, WORLD } from '../colors';
+import {
+  cloneTextureKey,
+  ensureDoorTexture,
+  ensureGameTextures,
+  ensurePlateTextures,
+  ensurePlatformTexture,
+  playerTextureKey,
+} from './textures';
 
 interface PlayerView {
   sprite: Phaser.GameObjects.Image;
@@ -30,22 +39,27 @@ interface CloneView {
 }
 
 interface DoorView {
-  rect: Phaser.GameObjects.Rectangle;
+  panel: Phaser.GameObjects.Image;
+  lamp: Phaser.GameObjects.Arc;
   bounds: AABB;
   wasOpen: boolean;
 }
 
 interface ButtonView {
-  plate: Phaser.GameObjects.Rectangle;
+  plate: Phaser.GameObjects.Image;
   center: Vec2;
   wasPressed: boolean;
 }
 
+interface PlatformView {
+  deck: Phaser.GameObjects.Image;
+  shadow: Phaser.GameObjects.Rectangle;
+}
+
 /**
  * Sprite-based presenter for one level. All game objects persist across
- * frames (transform updates only — the per-frame Graphics rebuild of the
- * first version was a main FPS sink); discrete state changes are detected
- * by diffing consecutive snapshots and drive the juice: pops, rings,
+ * frames (transform updates only); discrete state changes are detected by
+ * diffing consecutive snapshots and drive the juice: pops, rings,
  * squash-and-stretch, door slides, death bursts. Works identically for
  * local play and online snapshots.
  */
@@ -53,6 +67,7 @@ export class LevelRenderer {
   private readonly scene: Phaser.Scene;
   private readonly level: LevelDefinition;
 
+  private readonly backgroundLayer: Phaser.GameObjects.Graphics;
   private readonly staticLayer: Phaser.GameObjects.Graphics;
   private readonly wireLayer: Phaser.GameObjects.Graphics;
   private readonly beamLayer: Phaser.GameObjects.Graphics;
@@ -61,8 +76,9 @@ export class LevelRenderer {
   private cloneViews: CloneView[] = [];
   private readonly doors = new Map<string, DoorView>();
   private readonly buttons = new Map<string, ButtonView>();
-  private readonly platforms = new Map<string, Phaser.GameObjects.Rectangle>();
+  private readonly platforms = new Map<string, PlatformView>();
   private readonly exitGlows = new Map<string, Phaser.GameObjects.Rectangle>();
+  private readonly plateKeys: { idle: string; pressed: string };
 
   private prev: SimulationSnapshot | null = null;
   private beamCache = '';
@@ -73,25 +89,45 @@ export class LevelRenderer {
     this.scene = scene;
     this.level = level;
     ensureGameTextures(scene);
+    this.plateKeys = ensurePlateTextures(scene);
 
-    this.staticLayer = scene.add.graphics().setDepth(1);
+    this.backgroundLayer = scene.add.graphics().setDepth(-3);
     this.wireLayer = scene.add.graphics().setDepth(0);
+    this.staticLayer = scene.add.graphics().setDepth(1);
     this.beamLayer = scene.add.graphics().setDepth(5);
 
+    // Subtle high-frequency flicker sells the beams as live energy.
+    scene.tweens.add({
+      targets: this.beamLayer,
+      alpha: { from: 1, to: 0.86 },
+      duration: 110,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    this.drawBackground();
     this.drawStatic();
     this.buildObjects();
     this.buildPlayers();
   }
 
   destroy(): void {
+    this.backgroundLayer.destroy();
     this.staticLayer.destroy();
     this.wireLayer.destroy();
     this.beamLayer.destroy();
     for (const color of PLAYER_COLORS) this.players[color]?.sprite.destroy();
     for (const view of this.cloneViews) view.sprite.destroy();
-    for (const door of this.doors.values()) door.rect.destroy();
+    for (const door of this.doors.values()) {
+      door.panel.destroy();
+      door.lamp.destroy();
+    }
     for (const button of this.buttons.values()) button.plate.destroy();
-    for (const platform of this.platforms.values()) platform.destroy();
+    for (const platform of this.platforms.values()) {
+      platform.deck.destroy();
+      platform.shadow.destroy();
+    }
     for (const glow of this.exitGlows.values()) glow.destroy();
     for (const fx of this.spawned) fx.destroy();
   }
@@ -100,15 +136,53 @@ export class LevelRenderer {
   // Construction
   // ---------------------------------------------------------------------
 
+  /** Depth backdrop: vertical gradient plus a faint blueprint grid. */
+  private drawBackground(): void {
+    const g = this.backgroundLayer;
+    g.fillGradientStyle(UI.backgroundTop, UI.backgroundTop, UI.background, UI.background, 1);
+    g.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    g.lineStyle(1, 0xffffff, 0.022);
+    for (let x = 48; x < VIEW_WIDTH; x += 48) g.lineBetween(x, 0, x, VIEW_HEIGHT);
+    for (let y = 48; y < VIEW_HEIGHT; y += 48) g.lineBetween(0, y, VIEW_WIDTH, y);
+    // Soft glow pools under the exits give each goal a sense of place.
+    for (const object of this.level.objects) {
+      if (object.kind !== 'exit') continue;
+      const b = object.bounds;
+      g.fillStyle(EXIT_TINTS[object.color], 0.05);
+      g.fillCircle(b.x + b.width / 2, b.y + b.height / 2, 70);
+    }
+  }
+
   private drawStatic(): void {
     const g = this.staticLayer;
     for (const solid of this.level.solids) {
+      // Soft drop shadow under floating geometry.
+      if (solid.y + solid.height < VIEW_HEIGHT - 1) {
+        g.fillStyle(0x000000, 0.16);
+        g.fillRect(solid.x + 2, solid.y + solid.height, solid.width, 3);
+        g.fillStyle(0x000000, 0.07);
+        g.fillRect(solid.x + 3, solid.y + solid.height + 3, solid.width - 2, 3);
+      }
       g.fillStyle(WORLD.solid);
       g.fillRect(solid.x, solid.y, solid.width, solid.height);
-      // lighter top face reads as walkable ground
+      // Bevel: lit walking surface + edge highlight, shaded base.
       g.fillStyle(WORLD.solidTop);
       g.fillRect(solid.x, solid.y, solid.width, Math.min(5, solid.height));
+      g.fillStyle(WORLD.solidEdge, 0.85);
+      g.fillRect(solid.x, solid.y, solid.width, 1.5);
+      if (solid.height > 12) {
+        g.fillStyle(0x22252c, 0.8);
+        g.fillRect(solid.x, solid.y + solid.height - 3, solid.width, 3);
+      }
+      // Faint panel seams on wide slabs.
+      if (solid.width >= 128 && solid.height >= 24) {
+        g.lineStyle(1, 0x000000, 0.1);
+        for (let x = solid.x + 64; x < solid.x + solid.width - 8; x += 64) {
+          g.lineBetween(x, solid.y + 6, x, solid.y + solid.height - 4);
+        }
+      }
     }
+
     for (const object of this.level.objects) {
       if (object.kind === 'exit') {
         const b = object.bounds;
@@ -135,6 +209,9 @@ export class LevelRenderer {
         this.exitGlows.set(object.id, glow);
       }
       if (object.kind === 'laser') {
+        // Emitter housing with a warm standby glow and a lens.
+        g.fillStyle(WORLD.laserGlow, 0.12);
+        g.fillCircle(object.origin.x, object.origin.y, LASER_EMITTER_SIZE * 0.9);
         g.fillStyle(WORLD.laserEmitter);
         g.fillRoundedRect(
           object.origin.x - LASER_EMITTER_SIZE / 2,
@@ -143,13 +220,28 @@ export class LevelRenderer {
           LASER_EMITTER_SIZE,
           3,
         );
+        g.fillStyle(0x3a3f48, 1);
+        g.fillCircle(object.origin.x, object.origin.y, 4.5);
         g.fillStyle(WORLD.laserBeam);
         g.fillCircle(object.origin.x, object.origin.y, 3);
+        g.fillStyle(0xffffff, 0.85);
+        g.fillCircle(object.origin.x - 1, object.origin.y - 1, 1.2);
       }
       if (object.kind === 'button') {
-        // static dark base under the animated plate
+        // Recessed base slab under the animated plate.
         g.fillStyle(WORLD.buttonBase);
-        g.fillRect(object.position.x - 3, object.position.y + BUTTON_HEIGHT - 3, BUTTON_WIDTH + 6, 5);
+        g.fillRoundedRect(object.position.x - 4, object.position.y + BUTTON_HEIGHT - 4, BUTTON_WIDTH + 8, 6, 2);
+        g.fillStyle(0x000000, 0.25);
+        g.fillRect(object.position.x - 2, object.position.y + BUTTON_HEIGHT + 2, BUTTON_WIDTH + 4, 2);
+      }
+      if (object.kind === 'door') {
+        // The slot the shutter retracts into, plus guide rails.
+        const b = object.bounds;
+        g.fillStyle(0x14161b, 0.9);
+        g.fillRect(b.x - 3, b.y - 6, b.width + 6, 6);
+        g.fillStyle(0x2b2f38, 1);
+        g.fillRect(b.x - 3, b.y - 6, 3, b.height + 6);
+        g.fillRect(b.x + b.width, b.y - 6, 3, b.height + 6);
       }
     }
   }
@@ -158,12 +250,17 @@ export class LevelRenderer {
     for (const object of this.level.objects) {
       if (object.kind === 'door') {
         const b = object.bounds;
-        const rect = this.scene.add
-          .rectangle(b.x + b.width / 2, b.y, b.width, b.height, WORLD.door)
+        const key = ensureDoorTexture(this.scene, b.width, b.height);
+        const panel = this.scene.add
+          .image(b.x + b.width / 2, b.y, key)
           .setOrigin(0.5, 0)
-          .setStrokeStyle(2, WORLD.doorEdge, 0.8)
+          .setDisplaySize(b.width, b.height)
           .setDepth(2);
-        this.doors.set(object.id, { rect, bounds: b, wasOpen: false });
+        const lamp = this.scene.add
+          .circle(b.x + b.width / 2, b.y - 10, 3, 0xd84a4a)
+          .setStrokeStyle(1.5, 0x14161b, 1)
+          .setDepth(2);
+        this.doors.set(object.id, { panel, lamp, bounds: b, wasOpen: false });
       }
       if (object.kind === 'button') {
         const center = {
@@ -171,24 +268,23 @@ export class LevelRenderer {
           y: object.position.y + BUTTON_HEIGHT,
         };
         const plate = this.scene.add
-          .rectangle(center.x, center.y, BUTTON_WIDTH, BUTTON_HEIGHT, WORLD.button)
+          .image(center.x, center.y, this.plateKeys.idle)
           .setOrigin(0.5, 1)
+          .setDisplaySize(BUTTON_WIDTH, BUTTON_HEIGHT)
           .setDepth(2);
         this.buttons.set(object.id, { plate, center, wasPressed: false });
       }
       if (object.kind === 'movingPlatform' || object.kind === 'elevator') {
         const start = object.kind === 'movingPlatform' ? object.path[0]! : object.from;
-        const rect = this.scene.add
-          .rectangle(
-            start.x + object.size.width / 2,
-            start.y + object.size.height / 2,
-            object.size.width,
-            object.size.height,
-            WORLD.platform,
-          )
-          .setStrokeStyle(1.5, WORLD.platformEdge, 0.9)
+        const key = ensurePlatformTexture(this.scene, object.size.width, object.size.height);
+        const deck = this.scene.add
+          .image(start.x + object.size.width / 2, start.y + object.size.height / 2, key)
+          .setDisplaySize(object.size.width, object.size.height)
           .setDepth(2);
-        this.platforms.set(object.id, rect);
+        const shadow = this.scene.add
+          .rectangle(deck.x, deck.y + object.size.height / 2 + 4, object.size.width * 0.9, 4, 0x000000, 0.18)
+          .setDepth(1);
+        this.platforms.set(object.id, { deck, shadow });
       }
     }
   }
@@ -351,14 +447,16 @@ export class LevelRenderer {
       const open = snapshot.doors[id] === true;
       if (open !== view.wasOpen) {
         view.wasOpen = open;
-        this.scene.tweens.killTweensOf(view.rect);
+        view.lamp.setFillStyle(open ? 0x7ed957 : 0xd84a4a);
+        this.scene.tweens.killTweensOf(view.panel);
         this.scene.tweens.add({
-          targets: view.rect,
-          scaleY: open ? 0.08 : 1,
-          fillAlpha: open ? 0.5 : 1,
+          targets: view.panel,
+          scaleY: (open ? 0.08 : 1) * (view.bounds.height / view.panel.height),
+          alpha: open ? 0.55 : 1,
           duration: 240,
           ease: open ? 'Quad.easeOut' : 'Back.easeOut',
         });
+        if (open) this.ring(view.bounds.x + view.bounds.width / 2, view.bounds.y + 4, WORLD.doorEdge, 22);
       }
     }
   }
@@ -368,14 +466,17 @@ export class LevelRenderer {
       const pressed = snapshot.buttons[id] === true;
       if (pressed !== view.wasPressed) {
         view.wasPressed = pressed;
+        view.plate.setTexture(pressed ? this.plateKeys.pressed : this.plateKeys.idle);
+        // Squash relative to the texture's full-size scale, not the current
+        // (possibly mid-tween) scale — otherwise the squash compounds.
+        const baseY = BUTTON_HEIGHT / view.plate.height;
         this.scene.tweens.killTweensOf(view.plate);
         this.scene.tweens.add({
           targets: view.plate,
-          scaleY: pressed ? 0.45 : 1,
+          scaleY: (pressed ? 0.45 : 1) * baseY,
           duration: 110,
           ease: 'Quad.easeOut',
         });
-        view.plate.setFillStyle(pressed ? WORLD.buttonPressed : WORLD.button);
         if (pressed) this.ring(view.center.x, view.center.y - 4, WORLD.button, 26);
       }
     }
@@ -385,9 +486,12 @@ export class LevelRenderer {
     for (const object of this.level.objects) {
       if (object.kind !== 'movingPlatform' && object.kind !== 'elevator') continue;
       const position = snapshot.platforms[object.id];
-      const rect = this.platforms.get(object.id);
-      if (position && rect) {
-        rect.setPosition(position.x + object.size.width / 2, position.y + object.size.height / 2);
+      const view = this.platforms.get(object.id);
+      if (position && view) {
+        const cx = position.x + object.size.width / 2;
+        const cy = position.y + object.size.height / 2;
+        view.deck.setPosition(cx, cy);
+        view.shadow.setPosition(cx, cy + object.size.height / 2 + 4);
       }
     }
   }
@@ -412,11 +516,23 @@ export class LevelRenderer {
     const g = this.beamLayer;
     g.clear();
     for (const beam of beams) {
-      // soft glow, then the hot core
-      g.fillStyle(WORLD.laserGlow, 0.22);
-      g.fillRect(beam.x - 2, beam.y - 2, beam.width + 4, beam.height + 4);
-      g.fillStyle(WORLD.laserBeam, 0.9);
+      const horizontal = beam.width >= beam.height;
+      // Layered halo: wide and faint into narrow and hot.
+      g.fillStyle(WORLD.laserGlow, 0.06);
+      g.fillRect(beam.x - 6, beam.y - 6, beam.width + 12, beam.height + 12);
+      g.fillStyle(WORLD.laserGlow, 0.14);
+      g.fillRect(beam.x - 3, beam.y - 3, beam.width + 6, beam.height + 6);
+      g.fillStyle(WORLD.laserBeam, 0.45);
+      g.fillRect(beam.x - 1, beam.y - 1, beam.width + 2, beam.height + 2);
+      g.fillStyle(WORLD.laserBeam, 0.95);
       g.fillRect(beam.x, beam.y, beam.width, beam.height);
+      // White-hot core line.
+      g.fillStyle(0xffe9e9, 0.9);
+      if (horizontal) {
+        g.fillRect(beam.x, beam.y + beam.height / 2 - 1, beam.width, 2);
+      } else {
+        g.fillRect(beam.x + beam.width / 2 - 1, beam.y, 2, beam.height);
+      }
     }
   }
 

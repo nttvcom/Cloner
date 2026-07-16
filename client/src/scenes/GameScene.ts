@@ -8,6 +8,7 @@ import {
   type SimulationSnapshot,
 } from '@cloner/shared';
 import { PLAYER_TINTS, UI } from '../colors';
+import { DebugPanel } from '../debug/DebugPanel';
 import { DuoKeyboard, SoloKeyboard } from '../input/keyboard';
 import { t } from '../i18n';
 import { LevelRenderer } from '../render/LevelRenderer';
@@ -35,6 +36,7 @@ export class GameScene extends Phaser.Scene {
   private overlayShown = false;
   private ended = false;
   private showFps = false;
+  private debugPanel: DebugPanel | null = null;
 
   constructor() {
     super('Game');
@@ -63,6 +65,8 @@ export class GameScene extends Phaser.Scene {
     this.announceLevel();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.debugPanel?.destroy();
+      this.debugPanel = null;
       this.levelRenderer.destroy();
     });
 
@@ -71,6 +75,37 @@ export class GameScene extends Phaser.Scene {
       this.showFps = !this.showFps;
       this.fpsText.setVisible(this.showFps);
     });
+    // R: quick restart (local sessions — online resets are server-authoritative).
+    this.input.keyboard!.on('keydown-R', () => this.restartLevel());
+    // Shift+~: hidden developer panel.
+    this.input.keyboard!.on('keydown-BACKTICK', (event: KeyboardEvent) => {
+      if (!event.shiftKey) return;
+      if (this.debugPanel) {
+        this.debugPanel.destroy();
+        this.debugPanel = null;
+      } else {
+        this.debugPanel = new DebugPanel(this, this.session, this.session.level, this.levelIndex, {
+          switchLevel: (index) => this.jumpToLevel(index),
+          resetLevel: () => this.restartLevel(),
+        });
+      }
+    });
+  }
+
+  private restartLevel(): void {
+    if (this.ended || this.session.mode !== 'local') return;
+    this.ended = true;
+    this.session.dispose();
+    this.scene.restart({ mode: 'local', levelIndex: this.levelIndex });
+  }
+
+  /** Debug-only: jump to any campaign level, ignoring unlock state. */
+  private jumpToLevel(index: number): void {
+    if (this.ended || this.session.mode !== 'local') return;
+    const wrapped = (index + LEVELS.length) % LEVELS.length;
+    this.ended = true;
+    this.session.dispose();
+    this.scene.restart({ mode: 'local', levelIndex: wrapped });
   }
 
   private quitToMenu(): void {
@@ -142,6 +177,7 @@ export class GameScene extends Phaser.Scene {
     if (snapshot) {
       this.levelRenderer.render(snapshot);
       this.updateHud(snapshot, delta);
+      this.debugPanel?.update(snapshot);
     }
     this.session.consumeEvents(); // renderer diffing owns the FX now
 

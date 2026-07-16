@@ -1,4 +1,4 @@
-import type { LevelDefinition, SimEvent, SimulationSnapshot } from '@cloner/shared';
+import type { LevelDefinition, SimEvent, Simulation, SimulationSnapshot } from '@cloner/shared';
 import type { DuoKeyboard, SoloKeyboard } from '../input/keyboard';
 
 export type SessionStatus =
@@ -18,6 +18,7 @@ export interface GameSession {
   /** Discrete events since the last call (effects, sounds). */
   consumeEvents(): SimEvent[];
   status(): SessionStatus;
-  /** Local only: advance to the given level after a completed one. */
+  /** The local simulation, if this session runs one (null online). */
+  getSimulation(): Simulation | null;
   dispose(): void;
 }

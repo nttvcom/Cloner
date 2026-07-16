@@ -33,6 +33,9 @@ function pressed(now: boolean, before: boolean): boolean {
   return now && !before;
 }
 
+/** Pause at each end of a powered elevator's run — riders board/leave calmly. */
+const ELEVATOR_DWELL_TICKS = 66; // ~1.1s
+
 interface PlatformRuntime {
   def: MovingPlatformDef | ElevatorDef;
   position: Vec2;
@@ -43,6 +46,10 @@ interface PlatformRuntime {
   progress: number;
   /** For moving platforms: index of the path segment currently being walked. */
   segment: number;
+  /** Elevator shuttle direction: 1 = toward `to`, -1 = toward `from`. */
+  direction: 1 | -1;
+  /** Elevator: remaining pause ticks at an endpoint. */
+  dwellTicks: number;
 }
 
 /**
@@ -69,6 +76,10 @@ export class Simulation {
   private lasersFiring: Record<ObjectId, boolean> = {};
   private platforms: Record<ObjectId, PlatformRuntime> = {};
   private completed = false;
+
+  // Debug-only state (never set by the server; local dev tooling).
+  private readonly noclip = new Set<PlayerColor>();
+  private unlimitedClones = false;
 
   constructor(level: LevelDefinition) {
     this.level = level;
@@ -133,6 +144,8 @@ export class Simulation {
         position: { x: start?.x ?? 0, y: start?.y ?? 0 },
         progress: 0,
         segment: 0,
+        direction: 1,
+        dwellTicks: 0,
       };
     }
   }
@@ -398,8 +411,30 @@ export class Simulation {
       const dy = def.to.y - def.from.y;
       const length = Math.hypot(dx, dy);
       if (length === 0) return { ...runtime.position };
-      const dir = this.isPowered(def.id) ? 1 : -1;
-      runtime.progress = Math.min(length, Math.max(0, runtime.progress + dir * def.speed * DT));
+      if (this.isPowered(def.id)) {
+        // Powered elevators SHUTTLE between the ends (with a dwell pause at
+        // each) instead of parking at the top — a one-shot ride made levels
+        // where the power clone lands before boarding nearly impossible.
+        if (runtime.dwellTicks > 0) {
+          runtime.dwellTicks -= 1;
+          return { ...runtime.position };
+        }
+        runtime.progress += runtime.direction * def.speed * DT;
+        if (runtime.progress >= length) {
+          runtime.progress = length;
+          runtime.direction = -1;
+          runtime.dwellTicks = ELEVATOR_DWELL_TICKS;
+        } else if (runtime.progress <= 0) {
+          runtime.progress = 0;
+          runtime.direction = 1;
+          runtime.dwellTicks = ELEVATOR_DWELL_TICKS;
+        }
+      } else {
+        // Unpowered: glide home and wait, ready to head up again.
+        runtime.direction = 1;
+        runtime.dwellTicks = 0;
+        runtime.progress = Math.max(0, runtime.progress - def.speed * DT);
+      }
       const t = runtime.progress / length;
       return { x: def.from.x + dx * t, y: def.from.y + dy * t };
     }
@@ -459,7 +494,7 @@ export class Simulation {
       const beam = computeLaserBeam(def, obstacles);
       for (const color of PLAYER_COLORS) {
         const player = this.players[color];
-        if (!this.playerIsPresent(player)) continue;
+        if (!this.playerIsPresent(player) || this.noclip.has(color)) continue;
         if (aabbIntersects(this.playerBox(player), beam)) {
           events.push({ type: 'playerDied', color });
           events.push({ type: 'levelReset' });
@@ -530,6 +565,11 @@ export class Simulation {
       return;
     }
 
+    if (this.noclip.has(color)) {
+      this.applyNoclipMovement(player, input);
+      return;
+    }
+
     if (pressed(input.placeClone, prev.placeClone) && this.canPlaceClone(color)) {
       this.placeClone(player);
       events.push({ type: 'clonePlaced', owner: color });
@@ -541,6 +581,17 @@ export class Simulation {
     }
 
     this.applyMovement(player, input, prev);
+  }
+
+  /** Debug noclip: free flight, no gravity, no collisions, no death. */
+  private applyNoclipMovement(player: PlayerState, input: PlayerInput): void {
+    const speed = MOVE_SPEED * 1.5;
+    player.velocity.x = ((input.right ? 1 : 0) - (input.left ? 1 : 0)) * speed;
+    player.velocity.y = ((input.down ? 1 : 0) - (input.jump ? 1 : 0)) * speed;
+    player.position.x += player.velocity.x * DT;
+    player.position.y += player.velocity.y * DT;
+    player.isGrounded = false;
+    this.clampToScreen(player);
   }
 
   private applyMovement(player: PlayerState, input: PlayerInput, prev: PlayerInput): void {
@@ -586,6 +637,7 @@ export class Simulation {
   // -------------------------------------------------------------------------
 
   private canPlaceClone(color: PlayerColor): boolean {
+    if (this.unlimitedClones) return true;
     const owned = this.clones.filter((clone) => clone.owner === color).length;
     return owned < this.level.cloneLimitPerPlayer;
   }
@@ -663,5 +715,38 @@ export class Simulation {
       width: runtime.def.size.width,
       height: runtime.def.size.height,
     };
+  }
+
+  // -------------------------------------------------------------------------
+  // Debug hooks — used only by the hidden client dev panel, never the server.
+  // -------------------------------------------------------------------------
+
+  debugSetNoclip(color: PlayerColor, on: boolean): void {
+    if (on) this.noclip.add(color);
+    else this.noclip.delete(color);
+  }
+
+  debugIsNoclip(color: PlayerColor): boolean {
+    return this.noclip.has(color);
+  }
+
+  debugTeleport(color: PlayerColor, x: number, y: number): void {
+    const player = this.players[color];
+    player.position.x = Math.max(0, Math.min(VIEW_WIDTH - PLAYER_SIZE, x - PLAYER_SIZE / 2));
+    player.position.y = Math.max(0, Math.min(VIEW_HEIGHT - PLAYER_SIZE, y - PLAYER_SIZE / 2));
+    player.velocity = { x: 0, y: 0 };
+    player.teleportTicksLeft = 0;
+  }
+
+  debugClearClones(): void {
+    this.clones = [];
+  }
+
+  debugSetUnlimitedClones(on: boolean): void {
+    this.unlimitedClones = on;
+  }
+
+  debugUnlimitedClonesOn(): boolean {
+    return this.unlimitedClones;
   }
 }

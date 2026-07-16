@@ -11,15 +11,14 @@
         margin: 0;
         height: 100%;
         background: #111216;
+        overflow: hidden;
       }
+      /* Phaser's Scale.FIT + CENTER_BOTH owns sizing AND centering of the
+         canvas. Adding CSS centering here (grid/flex) double-centers and
+         shifts the game right/down in windowed mode. */
       #app {
+        width: 100%;
         height: 100%;
-        display: grid;
-        place-items: center;
-      }
-      canvas {
-        max-width: 100vw;
-        max-height: 100vh;
       }
     </style>
   </head>

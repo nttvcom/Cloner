@@ -261,7 +261,7 @@ const LEVEL_11: LevelDefinition = {
   id: 'level-11',
   nameKey: 'level.11.name',
   cloneLimitPerPlayer: 1,
-  spawns: { blue: { x: 480, y: FLOOR_TOP - 28 }, red: { x: 520, y: FLOOR_TOP - 28 } },
+  spawns: { blue: { x: 500, y: FLOOR_TOP - 28 }, red: { x: 530, y: FLOOR_TOP - 28 } },
   solids: [fullFloor, { x: 654, y: 200, width: 306, height: 20 }],
   objects: [
     { kind: 'button', id: 'plate-lift', position: { x: 450, y: PLATE_Y }, targets: ['lift'] },

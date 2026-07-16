@@ -8,6 +8,8 @@ export interface PlayerInput {
   jump: boolean;
   placeClone: boolean;
   removeClone: boolean;
+  /** Optional (protocol-compatible): only used by the debug noclip mode. */
+  down?: boolean;
 }
 
 export const EMPTY_INPUT: Readonly<PlayerInput> = {
@@ -16,4 +18,5 @@ export const EMPTY_INPUT: Readonly<PlayerInput> = {
   jump: false,
   placeClone: false,
   removeClone: false,
+  down: false,
 };

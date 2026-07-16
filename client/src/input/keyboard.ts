@@ -9,11 +9,12 @@ interface Binding {
   jump: number;
   placeClone: number;
   removeClone: number;
+  down: number;
 }
 
 /** Designer-approved defaults: P1 = WASD + E/F, P2 = Arrows + K/L. */
-const P1: Binding = { left: K.A, right: K.D, jump: K.W, placeClone: K.E, removeClone: K.F };
-const P2: Binding = { left: K.LEFT, right: K.RIGHT, jump: K.UP, placeClone: K.K, removeClone: K.L };
+const P1: Binding = { left: K.A, right: K.D, jump: K.W, placeClone: K.E, removeClone: K.F, down: K.S };
+const P2: Binding = { left: K.LEFT, right: K.RIGHT, jump: K.UP, placeClone: K.K, removeClone: K.L, down: K.DOWN };
 
 type KeySet = Record<keyof Binding, Phaser.Input.Keyboard.Key>;
 
@@ -25,6 +26,7 @@ function addKeys(scene: Phaser.Scene, binding: Binding): KeySet {
     jump: keyboard.addKey(binding.jump),
     placeClone: keyboard.addKey(binding.placeClone),
     removeClone: keyboard.addKey(binding.removeClone),
+    down: keyboard.addKey(binding.down),
   };
 }
 
@@ -35,6 +37,7 @@ function read(keys: KeySet): PlayerInput {
     jump: keys.jump.isDown,
     placeClone: keys.placeClone.isDown,
     removeClone: keys.removeClone.isDown,
+    down: keys.down.isDown,
   };
 }
 
@@ -72,6 +75,7 @@ export class SoloKeyboard {
       jump: a.jump || b.jump,
       placeClone: a.placeClone || b.placeClone,
       removeClone: a.removeClone || b.removeClone,
+      down: (a.down ?? false) || (b.down ?? false),
     };
   }
 }

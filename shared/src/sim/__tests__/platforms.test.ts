@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PLAYER_SIZE, VIEW_HEIGHT, VIEW_WIDTH } from '../../constants/game';
 import { TELEPORT_DURATION_TICKS } from '../../constants/physics';
+import { getLevelById } from '../../levels';
 import { EMPTY_INPUT, type PlayerInput } from '../../types/input';
 import type { LevelDefinition } from '../../types/level';
 import { Simulation, type InputMap } from '../Simulation';
@@ -88,5 +89,56 @@ describe('moving platforms vs bodies', () => {
     // Stalled flush against the clone (clone left edge at 400).
     expect(platform.x + 60).toBeLessThanOrEqual(400 + 0.001);
     expect(platform.x + 60).toBeGreaterThan(380);
+  });
+});
+
+describe('elevator shuttle', () => {
+  it('a powered elevator cycles: up, dwell, back down — no one-shot parking', () => {
+    // Red spawns standing on the power button and never moves.
+    const fixture = level({
+      spawns: { blue: { x: 700, y: ON_FLOOR }, red: { x: 205, y: ON_FLOOR } },
+      objects: [
+        {
+          kind: 'button',
+          id: 'btn',
+          position: { x: 200, y: FLOOR_TOP - 10 },
+          targets: ['lift'],
+        },
+        {
+          kind: 'elevator',
+          id: 'lift',
+          size: { width: 100, height: 12 },
+          from: { x: 60, y: FLOOR_TOP - 12 },
+          to: { x: 60, y: 200 },
+          speed: 120,
+        },
+      ],
+    });
+    const sim = new Simulation(fixture);
+    let minY = Number.POSITIVE_INFINITY;
+    let cameBackDown = false;
+    for (let i = 0; i < 900; i += 1) {
+      sim.step(inputs());
+      const y = sim.snapshot().platforms['lift']!.y;
+      minY = Math.min(minY, y);
+      if (minY <= 201 && y > 350) cameBackDown = true;
+    }
+    expect(minY).toBeLessThanOrEqual(201); // reached the top…
+    expect(cameBackDown).toBe(true); // …and shuttled back down while powered
+  });
+
+  it('level 19 unwired lift keeps cycling — a missed ride is never a softlock', () => {
+    const level19 = getLevelById('level-19')!;
+    const sim = new Simulation(level19);
+    let minY = Number.POSITIVE_INFINITY;
+    let returnedLow = false;
+    for (let i = 0; i < 1400; i += 1) {
+      sim.step(inputs());
+      const y = sim.snapshot().platforms['lift']!.y;
+      minY = Math.min(minY, y);
+      if (minY <= 221 && y > 450) returnedLow = true;
+    }
+    expect(minY).toBeLessThanOrEqual(221);
+    expect(returnedLow).toBe(true);
   });
 });

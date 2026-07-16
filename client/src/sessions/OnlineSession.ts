@@ -154,6 +154,10 @@ export class OnlineSession implements GameSession {
     return this.state;
   }
 
+  getSimulation(): null {
+    return null; // the server owns the simulation online
+  }
+
   /** Leave the room cleanly (ESC from a game). */
   leave(): void {
     this.client.send({ type: 'leaveRoom' });

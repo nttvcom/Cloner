@@ -50,6 +50,10 @@ export class LocalSession implements GameSession {
     return this.sim.isCompleted ? { kind: 'complete' } : { kind: 'playing' };
   }
 
+  getSimulation(): Simulation {
+    return this.sim;
+  }
+
   dispose(): void {
     // Nothing to release: the simulation is plain data.
   }
