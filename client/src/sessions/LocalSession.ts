@@ -1,11 +1,12 @@
 import {
+  EMPTY_INPUT,
   SIMULATION_DELTA_MS,
   Simulation,
   type LevelDefinition,
   type SimEvent,
   type SimulationSnapshot,
 } from '@cloner/shared';
-import { DuoKeyboard, type SoloKeyboard } from '../input/keyboard';
+import { DuoKeyboard, SoloKeyboard } from '../input/keyboard';
 import type { GameSession, SessionStatus } from './GameSession';
 
 /**
@@ -26,10 +27,17 @@ export class LocalSession implements GameSession {
   }
 
   update(deltaMs: number, keyboard: DuoKeyboard | SoloKeyboard): void {
-    if (!(keyboard instanceof DuoKeyboard)) return;
+    // Solo levels drive one cube from a merged key set; Duo splits the board.
+    let inputs;
+    if (this.level.solo) {
+      if (!(keyboard instanceof SoloKeyboard)) return;
+      inputs = { blue: keyboard.readInput(), red: { ...EMPTY_INPUT } };
+    } else {
+      if (!(keyboard instanceof DuoKeyboard)) return;
+      inputs = keyboard.readInputs();
+    }
     // Cap to avoid a spiral after a background-tab stall.
     this.accumulatorMs = Math.min(this.accumulatorMs + deltaMs, 250);
-    const inputs = keyboard.readInputs();
     while (this.accumulatorMs >= SIMULATION_DELTA_MS) {
       this.accumulatorMs -= SIMULATION_DELTA_MS;
       this.events.push(...this.sim.step(inputs));

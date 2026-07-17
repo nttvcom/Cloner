@@ -290,7 +290,9 @@ export class LevelRenderer {
   }
 
   private buildPlayers(): void {
-    for (const color of PLAYER_COLORS) {
+    // In solo only the blue cube exists; never build a red sprite.
+    const colors: PlayerColor[] = this.level.solo ? ['blue'] : [...PLAYER_COLORS];
+    for (const color of colors) {
       const spawn = this.level.spawns[color];
       const sprite = this.scene.add
         .image(spawn.x + PLAYER_SIZE / 2, spawn.y + PLAYER_SIZE / 2, playerTextureKey(color))
@@ -331,8 +333,9 @@ export class LevelRenderer {
 
   private renderPlayers(snapshot: SimulationSnapshot): void {
     for (const color of PLAYER_COLORS) {
-      const state = snapshot.players[color];
       const view = this.players[color];
+      if (!view) continue; // solo: no red cube
+      const state = snapshot.players[color];
       const sprite = view.sprite;
       const cx = state.position.x + PLAYER_SIZE / 2;
       const cy = state.position.y + PLAYER_SIZE / 2;

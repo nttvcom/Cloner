@@ -78,4 +78,10 @@ export interface LevelDefinition {
   /** Static solid geometry: floors, walls, ceilings. */
   solids: AABB[];
   objects: LevelObjectDef[];
+  /**
+   * Single-player level: only the blue cube is active (red is absent) and the
+   * Golden Rule inverts — blue collides with its OWN clones. The whole solo
+   * campaign is built on placing clones as your own platforms/weights/shields.
+   */
+  solo?: boolean;
 }

@@ -143,6 +143,40 @@ class Bot {
     this.waitLift(id, this.bottomOf(id));
     this.walkTo(c, atX, 160);
   }
+
+  /**
+   * Run one cube toward targetX, auto-jumping when a step (a clone/ledge)
+   * blocks forward progress. Succeeds near targetX; with `targetFeetY` it must
+   * also stand at that height (on the intended surface). Used for clone-ladder
+   * / bridge crossings where the cube must mount the OTHER player's clone.
+   */
+  climb(c: PlayerColor, targetX: number, targetFeetY: number | null, maxT = 900): boolean {
+    let stuck = 0;
+    for (let t = 0; t < maxT; t += 1) {
+      if (this.done()) return true;
+      if (this.tp(c) > 0) {
+        this.step();
+        continue;
+      }
+      const state = this.snap().players[c];
+      const grounded = state.isGrounded;
+      const feet = state.position.y + PLAYER_SIZE;
+      const atX = Math.abs(this.px(c) - targetX) <= 6;
+      if (targetFeetY !== null && atX && grounded && Math.abs(feet - targetFeetY) <= 5) {
+        this.rest(c);
+        return true;
+      }
+      const dir = targetX - this.px(c);
+      const doJump = grounded && stuck >= 2;
+      this.hold(c, { right: dir > 2, left: dir < -2, jump: doJump });
+      const before = this.px(c);
+      this.step();
+      if (grounded && Math.abs(this.px(c) - before) < 0.4) stuck += 1;
+      else stuck = 0;
+    }
+    this.rest(c);
+    return this.done();
+  }
 }
 
 describe('campaign: no level is trivially solvable without clones', () => {
@@ -233,19 +267,15 @@ describe('campaign: scripted solutions complete the elevator levels', () => {
     expect(bot.done()).toBe(true);
   });
 
-  it('level 14 — power + suppress, both ride up to the double exit', () => {
-    const level = getLevelById('level-14')!;
-    const bot = new Bot(level);
-    bot.recordBottoms();
-    bot.walkTo('red', 880);
-    bot.place('red'); // suppress the ceiling beam
-    bot.walkTo('blue', 800);
-    bot.place('blue'); // power the lift
-    bot.rideUp('blue', 'lift', 600, 240);
-    bot.walkTo('blue', 140, 400);
-    bot.rideUp('red', 'lift', 600, 240);
-    bot.walkTo('red', 158, 400);
-    for (let i = 0; i < 240 && !bot.done(); i += 1) bot.step();
+  it('level 14 — inverted bridges: each clone bridges the OTHER player across', () => {
+    const bot = new Bot(getLevelById('level-14')!);
+    bot.walkTo('blue', 428);
+    bot.place('blue'); // blue's clone closes RED's bridge (left pit)
+    bot.walkTo('red', 510);
+    bot.place('red'); // red's clone closes BLUE's bridge (right pit)
+    bot.climb('red', 60, null); // red crosses left, vaulting blue's clone
+    bot.climb('blue', 880, null); // blue crosses right, vaulting red's clone
+    for (let i = 0; i < 150 && !bot.done(); i += 1) bot.step();
     expect(bot.done()).toBe(true);
   });
 

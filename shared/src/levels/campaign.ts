@@ -333,35 +333,31 @@ const LEVEL_13: LevelDefinition = {
 };
 
 /**
- * 14 — ascent: the lift (in a floor notch) reaches a ledge whose approach is
- * drilled by a ceiling laser, and the goal is a shared DOUBLE exit past it.
- * One clone powers the lift, the other suppresses the beam; then both ride up
- * and meet in the exit. Plates sit right of spawn with the lift to the left,
- * so a placed clone never blocks the partner's run to the lift.
+ * 14 — inverted bridge: two laser pits separate the pair from their exits (red
+ * far left, blue far right). Each pit is spanned by an inverted door that CLOSES
+ * into a safe bridge when its plate is held. The trick is the crossing: blue's
+ * clone holds the plate that bridges RED's pit, and red's the one that bridges
+ * BLUE's — and each then vaults the partner's solid clone on the way across.
  */
 const LEVEL_14: LevelDefinition = {
   id: 'level-14',
   nameKey: 'level.14.name',
   cloneLimitPerPlayer: 1,
-  spawns: { blue: { x: 680, y: FLOOR_TOP - 28 }, red: { x: 712, y: FLOOR_TOP - 28 } },
+  spawns: { blue: { x: 440, y: FLOOR_TOP - 28 }, red: { x: 510, y: FLOOR_TOP - 28 } },
   solids: [
-    { x: 0, y: FLOOR_TOP, width: 560, height: FLOOR_H },
-    { x: 650, y: FLOOR_TOP, width: 310, height: FLOOR_H },
-    { x: 0, y: 240, width: 560, height: 20 }, // exit ledge, flush with the lift
+    { x: 0, y: FLOOR_TOP, width: 200, height: FLOOR_H }, // left floor (red exit)
+    { x: 400, y: FLOOR_TOP, width: 160, height: FLOOR_H }, // center floor (spawns + plates)
+    { x: 760, y: FLOOR_TOP, width: 200, height: FLOOR_H }, // right floor (blue exit)
   ],
   objects: [
-    { kind: 'button', id: 'plate-lift', position: { x: 800, y: PLATE_Y }, targets: ['lift'] },
-    { kind: 'button', id: 'plate-suppress', position: { x: 880, y: PLATE_Y }, targets: ['zap'] },
-    {
-      kind: 'elevator',
-      id: 'lift',
-      size: { width: 90, height: 14 },
-      from: { x: 560, y: FLOOR_TOP },
-      to: { x: 560, y: 240 },
-      speed: 60,
-    },
-    { kind: 'laser', id: 'zap', origin: { x: 330, y: 180 }, direction: 'down' },
-    { kind: 'exit', id: 'exit-double', color: 'double', bounds: { x: 110, y: 240 - EXIT_H, width: 80, height: EXIT_H } },
+    { kind: 'button', id: 'plate-left', position: { x: 428, y: PLATE_Y }, targets: ['bridge-left'] },
+    { kind: 'button', id: 'plate-right', position: { x: 510, y: PLATE_Y }, targets: ['bridge-right'] },
+    { kind: 'door', id: 'bridge-left', bounds: { x: 200, y: FLOOR_TOP, width: 200, height: FLOOR_H }, openByDefault: true },
+    { kind: 'door', id: 'bridge-right', bounds: { x: 560, y: FLOOR_TOP, width: 200, height: FLOOR_H }, openByDefault: true },
+    { kind: 'laser', id: 'pit-left', origin: { x: 210, y: 524 }, direction: 'right' },
+    { kind: 'laser', id: 'pit-right', origin: { x: 570, y: 524 }, direction: 'right' },
+    { kind: 'exit', id: 'exit-red', color: 'red', bounds: { x: 60, y: FLOOR_EXIT_Y, width: EXIT_W, height: EXIT_H } },
+    { kind: 'exit', id: 'exit-blue', color: 'blue', bounds: { x: 880, y: FLOOR_EXIT_Y, width: EXIT_W, height: EXIT_H } },
   ],
 };
 

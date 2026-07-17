@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import {
   LEVELS,
+  SOLO_LEVELS,
   getLevelIndex,
   VIEW_HEIGHT,
   VIEW_WIDTH,
+  type LevelDefinition,
   type PlayerColor,
   type SimulationSnapshot,
 } from '@cloner/shared';
@@ -21,6 +23,7 @@ import { OnlineSession } from '../sessions/OnlineSession';
 
 type GameData =
   | { mode: 'local'; levelIndex: number }
+  | { mode: 'solo'; levelIndex: number }
   | { mode: 'online'; session: OnlineSession };
 
 export class GameScene extends Phaser.Scene {
@@ -28,6 +31,9 @@ export class GameScene extends Phaser.Scene {
   private keyboard!: DuoKeyboard | SoloKeyboard;
   private levelRenderer!: LevelRenderer;
   private levelIndex = 0;
+  /** Single-player campaign flag (drives which level set + one-cube HUD). */
+  private solo = false;
+  private campaign: readonly LevelDefinition[] = LEVELS;
 
   private timerText!: Phaser.GameObjects.Text;
   private fpsText!: Phaser.GameObjects.Text;
@@ -50,14 +56,19 @@ export class GameScene extends Phaser.Scene {
     setupCamera(this);
     fadeIn(this);
 
-    if (data.mode === 'local') {
-      this.levelIndex = data.levelIndex;
-      this.session = new LocalSession(LEVELS[data.levelIndex]!);
-      this.keyboard = new DuoKeyboard(this);
-    } else {
+    if (data.mode === 'online') {
+      this.solo = false;
+      this.campaign = LEVELS;
       this.session = data.session;
       this.levelIndex = Math.max(0, getLevelIndex(this.session.level.id));
       this.keyboard = new SoloKeyboard(this);
+    } else {
+      this.solo = data.mode === 'solo';
+      this.campaign = this.solo ? SOLO_LEVELS : LEVELS;
+      this.levelIndex = data.levelIndex;
+      this.session = new LocalSession(this.campaign[data.levelIndex]!);
+      // Solo drives one cube with either key set; Duo splits the keyboard.
+      this.keyboard = this.solo ? new SoloKeyboard(this) : new DuoKeyboard(this);
     }
 
     this.levelRenderer = new LevelRenderer(this, this.session.level);
@@ -92,20 +103,24 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private localMode(): 'local' | 'solo' {
+    return this.solo ? 'solo' : 'local';
+  }
+
   private restartLevel(): void {
     if (this.ended || this.session.mode !== 'local') return;
     this.ended = true;
     this.session.dispose();
-    this.scene.restart({ mode: 'local', levelIndex: this.levelIndex });
+    this.scene.restart({ mode: this.localMode(), levelIndex: this.levelIndex });
   }
 
   /** Debug-only: jump to any campaign level, ignoring unlock state. */
   private jumpToLevel(index: number): void {
     if (this.ended || this.session.mode !== 'local') return;
-    const wrapped = (index + LEVELS.length) % LEVELS.length;
+    const wrapped = (index + this.campaign.length) % this.campaign.length;
     this.ended = true;
     this.session.dispose();
-    this.scene.restart({ mode: 'local', levelIndex: wrapped });
+    this.scene.restart({ mode: this.localMode(), levelIndex: wrapped });
   }
 
   private quitToMenu(): void {
@@ -208,12 +223,13 @@ export class GameScene extends Phaser.Scene {
     this.timerText.setText(`${mm}:${ss}`);
 
     const limit = this.session.level.cloneLimitPerPlayer;
-    for (const color of ['blue', 'red'] as PlayerColor[]) {
+    const colors: PlayerColor[] = this.solo ? ['blue'] : ['blue', 'red'];
+    for (const color of colors) {
       const used = snapshot.clones.filter((c) => c.owner === color).length;
-      this.cloneTexts[color]?.setText(
-        `${color === 'blue' ? 'P1' : 'P2'} ${t('game.clones')}: ${used}/${limit}`,
-      );
+      const label = this.solo ? '' : `${color === 'blue' ? 'P1' : 'P2'} `;
+      this.cloneTexts[color]?.setText(`${label}${t('game.clones')}: ${used}/${limit}`);
     }
+    if (this.solo) this.cloneTexts.red?.setText('');
   }
 
   private overlayPieces(main: string, hint: string): void {
@@ -249,10 +265,10 @@ export class GameScene extends Phaser.Scene {
 
   private showComplete(): void {
     this.levelRenderer.celebrate();
-    const isLast = this.levelIndex >= LEVELS.length - 1;
+    const isLast = this.levelIndex >= this.campaign.length - 1;
 
     if (this.session.mode === 'local') {
-      recordLevelComplete(this.levelIndex);
+      recordLevelComplete(this.levelIndex, this.solo);
       this.overlayPieces(
         isLast ? t('game.finished') : t('game.complete'),
         isLast ? t('game.finishedHint') : t('game.nextHint'),
@@ -264,7 +280,7 @@ export class GameScene extends Phaser.Scene {
         } else {
           this.cameras.main.fadeOut(160, 10, 11, 14);
           this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-            this.scene.restart({ mode: 'local', levelIndex: this.levelIndex + 1 });
+            this.scene.restart({ mode: this.localMode(), levelIndex: this.levelIndex + 1 });
           });
         }
       });

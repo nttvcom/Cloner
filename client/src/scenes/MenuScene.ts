@@ -39,19 +39,22 @@ export class MenuScene extends Phaser.Scene {
     this.mascot(cx - 250, 100, 'blue');
     this.mascot(cx + 250, 100, 'red');
 
-    makeButton(this, cx, 235, t('menu.duo'), () => goTo(this, 'LevelSelect'), { primary: true });
-    makeButton(this, cx, 302, t('menu.online'), () => goTo(this, 'Online'));
-    makeButton(this, cx, 369, t('menu.help'), () => goTo(this, 'Help'));
+    makeButton(this, cx, 212, t('menu.solo'), () => goTo(this, 'LevelSelect', { campaign: 'solo' }), {
+      primary: true,
+    });
+    makeButton(this, cx, 274, t('menu.duo'), () => goTo(this, 'LevelSelect', { campaign: 'coop' }));
+    makeButton(this, cx, 336, t('menu.online'), () => goTo(this, 'Online'));
+    makeButton(this, cx, 398, t('menu.help'), () => goTo(this, 'Help'));
     makeButton(
       this,
       cx,
-      436,
+      452,
       `${t('menu.langLabel')}: ${getLang().toUpperCase()}`,
       () => {
         toggleLang();
         this.scene.restart();
       },
-      { width: 180, height: 40, size: 15 },
+      { width: 180, height: 38, size: 15 },
     );
 
     makeText(this, cx, VIEW_HEIGHT - 20, 'v1.1', { size: 11, color: UI.dim }).setOrigin(0.5);

@@ -59,6 +59,10 @@ interface PlatformRuntime {
  */
 export class Simulation {
   private readonly level: LevelDefinition;
+  /** Single-player: only blue plays and it collides with its own clones. */
+  private readonly solo: boolean;
+  /** Colours the step loop actually simulates (just blue in solo). */
+  private readonly activeColors: PlayerColor[];
 
   private readonly buttonDefs: ButtonDef[] = [];
   private readonly doorDefs: DoorDef[] = [];
@@ -83,6 +87,8 @@ export class Simulation {
 
   constructor(level: LevelDefinition) {
     this.level = level;
+    this.solo = level.solo === true;
+    this.activeColors = this.solo ? ['blue'] : [...PLAYER_COLORS];
     for (const object of level.objects) {
       switch (object.kind) {
         case 'button':
@@ -130,6 +136,9 @@ export class Simulation {
       blue: this.spawnPlayer('blue'),
       red: this.spawnPlayer('red'),
     };
+    // In solo the red cube does not exist: mark it absent so it never presses
+    // buttons, trips exits, dies, or renders as a live player.
+    if (this.solo) this.players.red.isAlive = false;
     this.buttonsPressed = {};
     for (const button of this.buttonDefs) this.buttonsPressed[button.id] = false;
     this.doorsOpen = {};
@@ -171,7 +180,7 @@ export class Simulation {
     this.updateLasers();
     this.updatePlatforms();
 
-    for (const color of PLAYER_COLORS) {
+    for (const color of this.activeColors) {
       this.stepPlayer(color, inputs[color], this.previousInputs[color], events);
     }
 
@@ -654,11 +663,16 @@ export class Simulation {
     player.teleportTicksLeft = TELEPORT_DURATION_TICKS;
   }
 
-  /** Removing requires physically overlapping your OWN clone's outline. */
+  /**
+   * Removing requires touching your OWN clone. The player box is inflated a
+   * few pixels so it works in solo too, where the clone is SOLID and the cube
+   * merely rests flush against it (a strict overlap would never register).
+   */
   private tryRemoveClone(player: PlayerState): boolean {
-    const box = this.playerBox(player);
+    const b = this.playerBox(player);
+    const reach: AABB = { x: b.x - 3, y: b.y - 3, width: b.width + 6, height: b.height + 6 };
     const index = this.clones.findIndex(
-      (clone) => clone.owner === player.color && aabbIntersects(box, this.cloneBox(clone)),
+      (clone) => clone.owner === player.color && aabbIntersects(reach, this.cloneBox(clone)),
     );
     if (index === -1) return false;
     this.clones.splice(index, 1);
@@ -683,7 +697,7 @@ export class Simulation {
       colliders.push(this.platformBox(runtime));
     }
     for (const clone of this.clones) {
-      if (playerCollidesWithClone(color, clone.owner)) {
+      if (playerCollidesWithClone(color, clone.owner, this.solo)) {
         colliders.push(this.cloneBox(clone));
       }
     }
